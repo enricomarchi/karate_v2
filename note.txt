@@ -1,0 +1,3 @@
+- annulla punteggi
+- riordino manuale incontri (FATTO, da fare per tabellone elim dir con l'interfaccia visiva come schema generale)
+- pagina vue impostazioni gara
