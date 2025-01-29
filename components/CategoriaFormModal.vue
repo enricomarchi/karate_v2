@@ -104,11 +104,11 @@
 						Seleziona Sesso
 					</option>
 					<option
-						v-for="s in sessoOptions"
-						:key="s.id_sesso"
-						:value="s.id_sesso"
+						v-for="option in sessoOptions"
+						:key="option.value"
+						:value="option.value"
 					>
-						{{ s.valore }}
+						{{ option.label }}
 					</option>
 				</select>
 				<input
@@ -248,31 +248,82 @@
 	</div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, watch, onMounted } from "vue"
-import { useFetch } from "#app"
+import type { PropType } from "vue"  // Modifica qui: importazione type-only di PropType
+import { useFetch } from "nuxt/app"
+import type {
+    Categoria,
+    Disciplina,
+    Fascia,
+    Cintura,
+    SessoOption
+} from "~/types/global"
+
+// Aggiungi tipo esplicito per la categoria con valori di default
+const defaultCategoria: Categoria = {
+    nome: '',
+    id_disciplina: '',
+    sesso: 'X',
+    peso_min: null,
+    peso_max: null,
+    n_ordine: null,
+    fasce: [],
+    cinture: []
+}
 
 const props = defineProps({
-	categoria: Object,
-	discipline: Array,
-	sessoOptions: Array,
-	fasceEta: Array,
-	cinture: Array,
+    categoria: {
+        type: Object as PropType<Categoria>,
+        required: true,
+        default: () => ({...defaultCategoria})
+    },
+    discipline: {
+        type: Array as PropType<Disciplina[]>,
+        required: true
+    },
+    sessoOptions: {
+        type: Array as PropType<SessoOption[]>,
+        default: () => [
+            { value: 'M', label: 'Maschile' },
+            { value: 'F', label: 'Femminile' },
+            { value: 'X', label: 'Misto' }
+        ]
+    },
+    fasceEta: {
+        type: Array as PropType<Fascia[]>,
+        required: true
+    },
+    cinture: {
+        type: Array as PropType<Cintura[]>,
+        required: true
+    }
 })
 
 const emit = defineEmits(["close", "save"])
 
-const fasceDisponibili = ref([])
-const fasceSelezionate = ref([])
-const tempFasceDisponibili = ref([]) // Per la selezione dalla lista disponibile
-const tempFasceSelezionate = ref([]) // Per la selezione dalla lista selezionata
+// Tipizza i ref degli array
+const fasceDisponibili = ref<Fascia[]>([])
+const fasceSelezionate = ref<Fascia[]>([])
+const tempFasceDisponibili = ref<number[]>([])
+const tempFasceSelezionate = ref<number[]>([])
 
-const cintureDisponibili = ref([])
-const cintureSelezionate = ref([])
-const tempCintureDisponibili = ref([]) // Per la selezione dalla lista disponibile
-const tempCintureSelezionate = ref([]) // Per la selezione dalla lista selezionata
+const cintureDisponibili = ref<Cintura[]>([])
+const cintureSelezionate = ref<Cintura[]>([])
+const tempCintureDisponibili = ref<number[]>([])
+const tempCintureSelezionate = ref<number[]>([])
 
-const sortById = (a, b, idField) => a[idField] - b[idField]
+// Tipizza la funzione sortById
+const sortById = (a: any, b: any, idField: string) => a[idField] - b[idField]
+
+// Type guards
+const isFasciaWithId = (fascia: Fascia): fascia is Fascia & { id_fascia: number } => {
+    return fascia.id_fascia !== undefined;
+}
+
+const isCinturaWithId = (cintura: Cintura): cintura is Cintura & { id_cintura: number } => {
+    return cintura.id_cintura !== undefined;
+}
 
 onMounted(() => {
 	fasceDisponibili.value = [...props.fasceEta].sort((a, b) =>
@@ -287,59 +338,64 @@ onMounted(() => {
 	}
 
 	// Popola le liste selezionate se ci sono fasce e cinture
-	if (props.categoria.fasce && props.categoria.fasce.length > 0) {
-		// Trova le fasce corrispondenti agli ID
-		fasceSelezionate.value = props.fasceEta.filter((f) =>
-			props.categoria.fasce.includes(f.id_fascia)
-		)
-		// Rimuovi le fasce selezionate da quelle disponibili
-		fasceDisponibili.value = fasceDisponibili.value.filter(
-			(f) => !props.categoria.fasce.includes(f.id_fascia)
-		)
-	}
+	const fasce = props.categoria.fasce ?? []
+    const cinture = props.categoria.cinture ?? []
 
-	if (props.categoria.cinture && props.categoria.cinture.length > 0) {
-		// Trova le cinture corrispondenti agli ID
-		cintureSelezionate.value = props.cinture.filter((c) =>
-			props.categoria.cinture.includes(c.id_cintura)
-		)
-		// Rimuovi le cinture selezionate da quelle disponibili
-		cintureDisponibili.value = cintureDisponibili.value.filter(
-			(c) => !props.categoria.cinture.includes(c.id_cintura)
-		)
-	}
+    if (fasce.length > 0) {
+        fasceSelezionate.value = props.fasceEta.filter((f) =>
+            isFasciaWithId(f) && fasce.some(fascia => isFasciaWithId(fascia) && fascia.id_fascia === f.id_fascia)
+        )
+        fasceDisponibili.value = fasceDisponibili.value.filter((f) =>
+            isFasciaWithId(f) && !fasce.some(fascia => isFasciaWithId(fascia) && fascia.id_fascia === f.id_fascia)
+        )
+    }
+
+    if (cinture.length > 0) {
+        cintureSelezionate.value = props.cinture.filter((c) =>
+            isCinturaWithId(c) && cinture.some(cintura => isCinturaWithId(cintura) && cintura.id_cintura === c.id_cintura)
+        )
+        cintureDisponibili.value = cintureDisponibili.value.filter((c) =>
+            isCinturaWithId(c) && !cinture.some(cintura => isCinturaWithId(cintura) && cintura.id_cintura === c.id_cintura)
+        )
+    }
 })
 
 // Aggiungi questo watch per gestire i cambiamenti della categoria
 watch(
 	() => props.categoria,
 	(newCategoria) => {
-		if (newCategoria.fasce && newCategoria.fasce.length > 0) {
-			fasceSelezionate.value = props.fasceEta.filter((f) =>
-				newCategoria.fasce.includes(f.id_fascia)
-			)
-			fasceDisponibili.value = props.fasceEta.filter(
-				(f) => !newCategoria.fasce.includes(f.id_fascia)
-			)
-		}
+		const fasce = newCategoria.fasce ?? []
+        const cinture = newCategoria.cinture ?? []
 
-		if (newCategoria.cinture && newCategoria.cinture.length > 0) {
-			cintureSelezionate.value = props.cinture.filter((c) =>
-				newCategoria.cinture.includes(c.id_cintura)
-			)
-			cintureDisponibili.value = props.cinture.filter(
-				(c) => !newCategoria.cinture.includes(c.id_cintura)
-			)
-		}
+        if (fasce.length > 0) {
+            fasceSelezionate.value = props.fasceEta.filter((f) =>
+                isFasciaWithId(f) && fasce.some(fascia => isFasciaWithId(fascia) && fascia.id_fascia === f.id_fascia)
+            )
+            fasceDisponibili.value = props.fasceEta.filter(
+                (f) => isFasciaWithId(f) && !fasce.some(fascia => isFasciaWithId(fascia) && fascia.id_fascia === f.id_fascia)
+            )
+        }
+
+        if (cinture.length > 0) {
+            cintureSelezionate.value = props.cinture.filter((c) =>
+                isCinturaWithId(c) && cinture.some(cintura => isCinturaWithId(cintura) && cintura.id_cintura === c.id_cintura)
+            )
+            cintureDisponibili.value = props.cinture.filter(
+                (c) => isCinturaWithId(c) && !cinture.some(cintura => isCinturaWithId(cintura) && cintura.id_cintura === c.id_cintura)
+            )
+        }
 	},
 	{ deep: true }
 )
 
+// Modifica la funzione aggiungiFasce per gestire possibili undefined
 const aggiungiFasce = () => {
-	const selezionate = fasceDisponibili.value.filter((fascia) =>
-		tempFasceDisponibili.value.includes(fascia.id_fascia)
-	)
-	fasceSelezionate.value.push(...selezionate)
+    if (!tempFasceDisponibili.value.length) return
+
+    const selezionate = fasceDisponibili.value.filter((fascia) => {
+        return isFasciaWithId(fascia) && tempFasceDisponibili.value.includes(fascia.id_fascia)
+    })
+    fasceSelezionate.value.push(...selezionate)
 	fasceSelezionate.value.sort((a, b) => sortById(a, b, "id_fascia"))
 
 	fasceDisponibili.value = fasceDisponibili.value.filter(
@@ -349,9 +405,9 @@ const aggiungiFasce = () => {
 }
 
 const rimuoviFasce = () => {
-	const selezionate = fasceSelezionate.value.filter((fascia) =>
-		tempFasceSelezionate.value.includes(fascia.id_fascia)
-	)
+    const selezionate = fasceSelezionate.value.filter((fascia) => {
+        return isFasciaWithId(fascia) && tempFasceSelezionate.value.includes(fascia.id_fascia)
+    })
 	fasceDisponibili.value.push(...selezionate)
 	fasceDisponibili.value.sort((a, b) => sortById(a, b, "id_fascia"))
 
@@ -362,9 +418,9 @@ const rimuoviFasce = () => {
 }
 
 const aggiungiCinture = () => {
-	const selezionate = cintureDisponibili.value.filter((cintura) =>
-		tempCintureDisponibili.value.includes(cintura.id_cintura)
-	)
+    const selezionate = cintureDisponibili.value.filter((cintura) => {
+        return isCinturaWithId(cintura) && tempCintureDisponibili.value.includes(cintura.id_cintura)
+    })
 	cintureSelezionate.value.push(...selezionate)
 	cintureSelezionate.value.sort((a, b) => sortById(a, b, "id_cintura"))
 
@@ -375,9 +431,9 @@ const aggiungiCinture = () => {
 }
 
 const rimuoviCinture = () => {
-	const selezionate = cintureSelezionate.value.filter((cintura) =>
-		tempCintureSelezionate.value.includes(cintura.id_cintura)
-	)
+    const selezionate = cintureSelezionate.value.filter((cintura) => {
+        return isCinturaWithId(cintura) && tempCintureSelezionate.value.includes(cintura.id_cintura)
+    })
 	cintureDisponibili.value.push(...selezionate)
 	cintureDisponibili.value.sort((a, b) => sortById(a, b, "id_cintura"))
 
@@ -404,15 +460,17 @@ watch(
 	{ deep: true } // Aggiungi questa opzione
 )
 
+// Modifica la funzione generaNomeCategoria per gestire possibili undefined
 const generaNomeCategoria = () => {
-	const disciplina =
-		props.discipline.find(
-			(d) => d.id_disciplina === props.categoria.id_disciplina
-		)?.id_disciplina || ""
-	const sesso =
-		props.sessoOptions.find((s) => s.id_sesso === props.categoria.sesso)
-			?.valore || ""
-	const pesoMin = props.categoria.peso_min
+    const disciplina = props.discipline.find(
+        (d) => d.id_disciplina === props.categoria.id_disciplina
+    )?.valore ?? ''
+
+    const sesso = props.sessoOptions.find(
+        (s) => s.value === props.categoria.sesso
+    )?.label ?? ''
+
+    const pesoMin = props.categoria.peso_min
 		? `+${props.categoria.peso_min}Kg`
 		: ""
 	const pesoMax = props.categoria.peso_max
@@ -438,10 +496,16 @@ const generaNomeCategoria = () => {
 	props.categoria.nome = parts.filter(Boolean).join(" ")
 }
 
+// Aggiungi controlli null/undefined nelle funzioni che manipolano gli array
 const handleSave = async () => {
 	try {
-		const fasceIds = fasceSelezionate.value.map((f) => f.id_fascia)
-		const cintureIds = cintureSelezionate.value.map((c) => c.id_cintura)
+		const fasceIds = fasceSelezionate.value
+            .filter(isFasciaWithId)
+            .map(f => f.id_fascia)
+
+        const cintureIds = cintureSelezionate.value
+            .filter(isCinturaWithId)
+            .map(c => c.id_cintura)
 
 		// Assegna automaticamente n_ordine se è una nuova categoria
 		if (!props.categoria.id_categoria) {
@@ -463,6 +527,9 @@ const handleSave = async () => {
 			...props.categoria,
 			fasce: fasceIds,
 			cinture: cintureIds,
+			if (!props.categoria.nome || !props.categoria.id_disciplina || !props.categoria.sesso) {
+				throw new Error('Campi obbligatori mancanti')
+			}
 		}
 
 		const response = await fetch(
@@ -518,7 +585,10 @@ const generateNome = () => {
 	}
 
 	if (nomeFields.value.sesso && props.categoria.sesso) {
-		parts.push(props.categoria.sesso)
+		const sessoLabel = props.sessoOptions.find(
+			s => s.value === props.categoria.sesso
+		)?.label
+		if (sessoLabel) parts.push(sessoLabel)
 	}
 
 	if (

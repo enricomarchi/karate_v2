@@ -1,4 +1,4 @@
-import mysql from "mysql2/promise"
+import mysql, { type Pool, type PoolConnection } from "mysql2/promise"
 import dotenv from "dotenv"
 
 dotenv.config()
@@ -11,9 +11,9 @@ export const dbConfig = {
 	connectTimeout: 10000,
 }
 
-let pool: mysql.Pool | null = null
+let pool: Pool | null = null
 
-export const getConnection = async (): Promise<mysql.PoolConnection> => {
+export const getConnection = async (): Promise<PoolConnection> => {
 	try {
 		if (!pool) {
 			pool = mysql.createPool(dbConfig)

@@ -1,50 +1,45 @@
 import fs from "fs"
 import path from "path"
-import mysql from "mysql2/promise"
-import dotenv from "dotenv"
 import { defineEventHandler } from "h3"
 import { read } from "xlsx"
-
-dotenv.config()
-
-const dbConfig = {
-	host: process.env.DB_HOST,
-	user: process.env.DB_USER,
-	password: process.env.DB_PASSWORD,
-	database: process.env.DB_NAME,
-}
+import { getConnection } from "../utils/db"
 
 const getCinturaId = async (colore) => {
-	const connection = await mysql.createConnection(dbConfig)
-	const [rows] = await connection.execute(
-		"SELECT id_cintura FROM cinture WHERE colore = ?",
-		[colore]
-	)
-	await connection.end()
-	return rows.length ? rows[0].id_cintura : null
+	const conn = await getConnection()
+	try {
+		const [rows] = await conn.execute(
+			"SELECT id_cintura FROM cinture WHERE colore = ?",
+			[colore]
+		)
+		return rows.length ? rows[0].id_cintura : null
+	} finally {
+		conn.release()
+	}
 }
 
 const getSocietaId = async (nome_societa) => {
-	const connection = await mysql.createConnection(dbConfig)
-	const [rows] = await connection.execute(
-		"SELECT id_societa FROM societa WHERE nome_societa = ?",
-		[nome_societa]
-	)
-	if (rows.length) {
-		await connection.end()
-		return rows[0].id_societa
-	} else {
-		const [result] = await connection.execute(
-			"INSERT INTO societa (nome_societa) VALUES (?)",
+	const conn = await getConnection()
+	try {
+		const [rows] = await conn.execute(
+			"SELECT id_societa FROM societa WHERE nome_societa = ?",
 			[nome_societa]
 		)
-		await connection.end()
-		return result.insertId
+		if (rows.length) {
+			return rows[0].id_societa
+		} else {
+			const [result] = await conn.execute(
+				"INSERT INTO societa (nome_societa) VALUES (?)",
+				[nome_societa]
+			)
+			return result.insertId
+		}
+	} finally {
+		conn.release()
 	}
 }
 
 const insertAtleta = async (row, nome_societa) => {
-	const connection = await mysql.createConnection(dbConfig)
+	const conn = await getConnection()
 	try {
 		const cintura_id = await getCinturaId(row.CINTURA)
 		if (!cintura_id) {
@@ -55,11 +50,11 @@ const insertAtleta = async (row, nome_societa) => {
 			}
 		}
 		const societa_id = await getSocietaId(nome_societa)
-		const [result] = await connection.execute(
+		const [result] = await conn.execute(
 			`
-    INSERT INTO atleti (cognome, nome, sesso, anno_nascita, cintura_id, id_societa)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `,
+            INSERT INTO atleti (cognome, nome, sesso, anno_nascita, cintura_id, id_societa)
+            VALUES (?, ?, ?, ?, ?, ?)
+            `,
 			[
 				row.COGNOME,
 				row.NOME,
@@ -86,20 +81,20 @@ const insertAtleta = async (row, nome_societa) => {
 		}
 		throw errorInfo
 	} finally {
-		await connection.end()
+		conn.release()
 	}
 }
 
 const insertDiscipline = async (atleta_id, row) => {
-	const connection = await mysql.createConnection(dbConfig)
+	const conn = await getConnection()
 	try {
-		const [discipline] = await connection.execute(
+		const [discipline] = await conn.execute(
 			"SELECT id_disciplina FROM discipline"
 		)
 		for (const disciplina of discipline) {
 			if (row[disciplina.id_disciplina.toUpperCase()] === "SI") {
 				try {
-					await connection.execute(
+					await conn.execute(
 						"INSERT INTO iscrizioni (id_atleta, id_disciplina) VALUES (?, ?)",
 						[atleta_id, disciplina.id_disciplina]
 					)
@@ -114,35 +109,35 @@ const insertDiscipline = async (atleta_id, row) => {
 			}
 		}
 	} finally {
-		await connection.end()
+		conn.release()
 	}
 }
 
 const clearTables = async () => {
-	const connection = await mysql.createConnection(dbConfig)
+	const conn = await getConnection()
 	try {
-		await connection.execute("SET FOREIGN_KEY_CHECKS = 0")
+		await conn.execute("SET FOREIGN_KEY_CHECKS = 0")
 
 		// Cancella i dati
-		await connection.execute("DELETE FROM iscrizioni")
-		await connection.execute("DELETE FROM atleti")
-		await connection.execute("DELETE FROM societa")
+		await conn.execute("DELETE FROM iscrizioni")
+		await conn.execute("DELETE FROM atleti")
+		await conn.execute("DELETE FROM societa")
 
 		// Resetta gli auto_increment
-		await connection.execute("ALTER TABLE iscrizioni AUTO_INCREMENT = 1")
-		await connection.execute("ALTER TABLE atleti AUTO_INCREMENT = 1")
-		await connection.execute("ALTER TABLE societa AUTO_INCREMENT = 1")
+		await conn.execute("ALTER TABLE iscrizioni AUTO_INCREMENT = 1")
+		await conn.execute("ALTER TABLE atleti AUTO_INCREMENT = 1")
+		await conn.execute("ALTER TABLE societa AUTO_INCREMENT = 1")
 
-		await connection.execute("SET FOREIGN_KEY_CHECKS = 1")
+		await conn.execute("SET FOREIGN_KEY_CHECKS = 1")
 	} finally {
-		await connection.end()
+		conn.release()
 	}
 }
 
 const insertIscrizioni = async () => {
-	const connection = await mysql.createConnection(dbConfig)
+	const conn = await getConnection()
 	try {
-		const [rows] = await connection.execute(`
+		await conn.execute(`
             UPDATE iscrizioni i
             JOIN atleti_categorie ac ON i.id_atleta = ac.id_atleta 
                 AND i.id_disciplina = ac.id_disciplina
@@ -153,7 +148,7 @@ const insertIscrizioni = async () => {
 		console.error("Errore durante l'aggiornamento delle iscrizioni:", error)
 		throw error
 	} finally {
-		await connection.end()
+		conn.release()
 	}
 }
 

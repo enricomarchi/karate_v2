@@ -237,41 +237,58 @@
 	</div>
 </template>
 
-<script setup>
-import { ref, onMounted, watch } from "vue"
-import { useFetch } from "#app"
+<script setup lang="ts">
+import { ref, type Ref } from "vue"
+import { useFetch } from "nuxt/app" // Importa useFetch correttamente da 'nuxt/app'
 import CategoriaFormModal from "@/components/CategoriaFormModal.vue"
 import CategorieAutomaticheFormModal from "@/components/CategorieAutomaticheFormModal.vue"
 import LoadingOverlay from "@/components/LoadingOverlay.vue"
+import type {
+	Categoria,
+	Disciplina,
+	Fascia,
+	Cintura,
+	SessoOption,
+} from "~/types/global"
 
-const categoria = ref({
-	id_categoria: null,
+// Definizione delle opzioni sesso come costante con tipo corretto
+const sessoOptions: SessoOption[] = [
+	{ value: "M", label: "Maschile" },
+	{ value: "F", label: "Femminile" },
+	{ value: "X", label: "Misto" },
+]
+
+const categoria: Ref<Categoria> = ref({
 	nome: "",
-	id_disciplina: null,
-	sesso: "",
+	id_disciplina: "",
+	sesso: "X",
 	peso_min: null,
 	peso_max: null,
 	n_ordine: null,
-	fasce: "",
-	cinture: "",
+	fasce: [],
+	cinture: [],
 })
+
+// Aggiorna le chiamate useFetch con i tipi corretti
+const { data: categorie } = await useFetch<Categoria[]>("/api/categorie")
+const { data: discipline } = await useFetch<Disciplina[]>("/api/discipline")
+const { data: fasceEta } = await useFetch<Fascia[]>("/api/fasce-eta")
+const { data: cinture } = await useFetch<Cintura[]>("/api/cinture")
+const { data: categorieOverlap } = await useFetch<number[]>(
+	"/api/categorie-sovrapposte"
+)
 
 const formVisible = ref(false)
 const automaticFormVisible = ref(false)
-const { data: categorie } = useFetch("/api/categorie")
-const { data: discipline } = useFetch("/api/discipline")
-const { data: sessoOptions } = useFetch("/api/sesso")
-const { data: fasceEta } = useFetch("/api/fasce-eta")
-const { data: cinture } = useFetch("/api/cinture")
-const { data: categorieFasce } = useFetch("/api/vista_categorie_fasce")
-const { data: categorieCinture } = useFetch("/api/vista_categorie_cinture")
-const { data: categorieOverlap } = useFetch("/api/categorie-sovrapposte")
-const selectedCategorie = ref([])
 
+const selectedCategorie = ref<number[]>([])
+const dragTarget = ref<number | null>(null)
+const loading = ref(false)
+const loadingMessage = ref("")
 const sortKey = ref("")
 const sortAsc = ref(true)
 
-const sortTable = (key) => {
+const sortTable = (key: keyof Categoria) => {
 	if (sortKey.value === key) {
 		sortAsc.value = !sortAsc.value
 	} else {
@@ -288,34 +305,34 @@ const sortTable = (key) => {
 const openForm = () => {
 	formVisible.value = true
 	categoria.value = {
-		id_categoria: null,
-		nome: "",
-		id_disciplina: null,
-		sesso: "",
-		peso_min: null,
-		peso_max: null,
-		n_ordine: null,
-		fasce: "",
-		cinture: "",
+		id_categoria: undefined,
+		nome: undefined,
+		id_disciplina: undefined,
+		sesso: undefined,
+		peso_min: undefined,
+		peso_max: undefined,
+		n_ordine: undefined,
+		fasce: [],
+		cinture: [],
 	}
 }
 
 const closeForm = () => {
 	formVisible.value = false
 	categoria.value = {
-		id_categoria: null,
-		nome: "",
-		id_disciplina: null,
-		sesso: "",
-		peso_min: null,
-		peso_max: null,
-		n_ordine: null,
-		fasce: "",
-		cinture: "",
+		id_categoria: undefined,
+		nome: undefined,
+		id_disciplina: undefined,
+		sesso: undefined,
+		peso_min: undefined,
+		peso_max: undefined,
+		n_ordine: undefined,
+		fasce: [],
+		cinture: [],
 	}
 }
 
-const saveCategoria = async (savedCategoria) => {
+const saveCategoria = async (savedCategoria: Categoria) => {
 	if (!savedCategoria.nome) {
 		console.error("Errore: il campo 'nome' non può essere nullo")
 		return
@@ -323,26 +340,21 @@ const saveCategoria = async (savedCategoria) => {
 	// Aggiorna i dati dopo il salvataggio
 	const [
 		{ data: categorieAggiornate },
-		{ data: categorieFasceAggiornate },
-		{ data: categorieCintureAggiornate },
-		{ data: categorieOverlapAggiornate }, // Aggiungi questa riga
+		{ data: categorieOverlapAggiornate },
 	] = await Promise.all([
-		useFetch("/api/categorie"),
-		useFetch("/api/vista_categorie_fasce"),
-		useFetch("/api/vista_categorie_cinture"),
-		useFetch("/api/categorie-sovrapposte"), // Aggiungi questa riga
+		useFetch<Categoria[]>("/api/categorie"),
+		useFetch<number[]>("/api/categorie-sovrapposte"),
 	])
 
 	// Aggiorna tutti i riferimenti
 	categorie.value = categorieAggiornate.value
-	categorieFasce.value = categorieFasceAggiornate.value
-	categorieCinture.value = categorieCintureAggiornate.value
-	categorieOverlap.value = categorieOverlapAggiornate.value // Aggiungi questa riga
+	categorieOverlap.value = categorieOverlapAggiornate.value
 
 	closeForm()
 }
 
-const toggleCategoriaSelection = (id_categoria) => {
+const toggleCategoriaSelection = (id_categoria?: number) => {
+	if (id_categoria === undefined) return
 	const index = selectedCategorie.value.indexOf(id_categoria)
 	if (index === -1) {
 		selectedCategorie.value.push(id_categoria)
@@ -359,12 +371,12 @@ const toggleAllSelection = () => {
 	}
 }
 
-const editCategoria = async (categoriaToEdit) => {
+const editCategoria = async (categoriaToEdit: Categoria) => {
 	try {
 		// Recupera i dettagli completi della categoria dal backend
-		const { data } = await useFetch(
-			`/api/categorie?id=${categoriaToEdit.id_categoria}`
-		)
+		const { data } = await useFetch<Categoria>(`/api/categorie`, {
+			query: { id: categoriaToEdit.id_categoria },
+		})
 
 		console.log("Dati ricevuti dal server:", data.value) // Aggiungi questo log
 
@@ -386,27 +398,23 @@ const editCategoria = async (categoriaToEdit) => {
 	}
 }
 
-const deleteCategoria = async (id_categoria) => {
+const deleteCategoria = async (id_categoria?: number) => {
+	if (id_categoria === undefined) return
 	try {
-		await useFetch(`/api/categorie?id=${id_categoria}`, {
+		await useFetch(`/api/categorie`, {
 			method: "DELETE",
+			query: { id: id_categoria },
 		})
 		// Aggiorna tutti i dati dopo l'eliminazione
 		const [
 			{ data: categorieAggiornate },
-			{ data: categorieFasceAggiornate },
-			{ data: categorieCintureAggiornate },
 			{ data: categorieOverlapAggiornate },
 		] = await Promise.all([
-			useFetch("/api/categorie"),
-			useFetch("/api/vista_categorie_fasce"),
-			useFetch("/api/vista_categorie_cinture"),
-			useFetch("/api/categorie-sovrapposte"),
+			useFetch<Categoria[]>("/api/categorie"),
+			useFetch<number[]>("/api/categorie-sovrapposte"),
 		])
 
 		categorie.value = categorieAggiornate.value
-		categorieFasce.value = categorieFasceAggiornate.value
-		categorieCinture.value = categorieCintureAggiornate.value
 		categorieOverlap.value = categorieOverlapAggiornate.value
 	} catch (error) {
 		console.error("Errore nella cancellazione della categoria:", error)
@@ -439,17 +447,17 @@ const deleteSelectedCategorie = async () => {
 	}
 }
 
-const copyCategoria = async (categoria) => {
+const copyCategoria = async (categoria: Categoria) => {
 	if (!categoria.nome) {
 		console.error("Errore: il campo 'nome' non può essere nullo")
 		return
 	}
-	const { data } = await useFetch(
-		`/api/categorie?id=${categoria.id_categoria}`
-	)
-	const newCategoria = {
+	const { data } = await useFetch<Categoria>(`/api/categorie`, {
+		query: { id: categoria.id_categoria },
+	})
+	const newCategoria: Categoria = {
 		...data.value,
-		id_categoria: null,
+		id_categoria: undefined,
 		nome: `${data.value.nome} (copia)`,
 	}
 	await useFetch("/api/categorie", { method: "POST", body: newCategoria })
@@ -457,19 +465,13 @@ const copyCategoria = async (categoria) => {
 	// Aggiorna tutti i dati dopo la copia
 	const [
 		{ data: categorieAggiornate },
-		{ data: categorieFasceAggiornate },
-		{ data: categorieCintureAggiornate },
 		{ data: categorieOverlapAggiornate },
 	] = await Promise.all([
-		useFetch("/api/categorie"),
-		useFetch("/api/vista_categorie_fasce"),
-		useFetch("/api/vista_categorie_cinture"),
-		useFetch("/api/categorie-sovrapposte"),
+		useFetch<Categoria[]>("/api/categorie"),
+		useFetch<number[]>("/api/categorie-sovrapposte"),
 	])
 
 	categorie.value = categorieAggiornate.value
-	categorieFasce.value = categorieFasceAggiornate.value
-	categorieCinture.value = categorieCintureAggiornate.value
 	categorieOverlap.value = categorieOverlapAggiornate.value
 }
 
@@ -504,16 +506,16 @@ const copySelectedCategorie = async () => {
 	}
 }
 
-const getFasce = (id_categoria) => {
-	return categorieFasce.value.filter(
-		(fascia) => fascia.id_categoria === id_categoria
-	)
+const getFasce = (id_categoria?: number) => {
+	if (id_categoria === undefined) return []
+	const cat = categorie.value?.find((c) => c.id_categoria === id_categoria)
+	return cat?.fasce ?? []
 }
 
-const getCinture = (id_categoria) => {
-	return categorieCinture.value.filter(
-		(cintura) => cintura.id_categoria === id_categoria
-	)
+const getCinture = (id_categoria?: number) => {
+	if (id_categoria === undefined) return []
+	const cat = categorie.value?.find((c) => c.id_categoria === id_categoria)
+	return cat?.cinture ?? []
 }
 
 const openAutomaticForm = () => {
@@ -524,47 +526,40 @@ const closeAutomaticForm = () => {
 	automaticFormVisible.value = false
 }
 
-const createCategorieAutomatiche = async (categorieData) => {
+const createCategorieAutomatiche = async (categorieData: Categoria[]) => {
 	// Aggiorna i dati dopo la creazione
 	const [
 		{ data: categorieAggiornate },
-		{ data: categorieFasceAggiornate },
-		{ data: categorieCintureAggiornate },
-		{ data: categorieOverlapAggiornate }, // Aggiungi questa riga
+		{ data: categorieOverlapAggiornate },
 	] = await Promise.all([
-		useFetch("/api/categorie"),
-		useFetch("/api/vista_categorie_fasce"),
-		useFetch("/api/vista_categorie_cinture"),
-		useFetch("/api/categorie-sovrapposte"), // Aggiungi questa riga
+		useFetch<Categoria[]>("/api/categorie"),
+		useFetch<number[]>("/api/categorie-sovrapposte"),
 	])
 
 	// Aggiorna tutti i riferimenti
 	categorie.value = categorieAggiornate.value
-	categorieFasce.value = categorieFasceAggiornate.value
-	categorieCinture.value = categorieCintureAggiornate.value
-	categorieOverlap.value = categorieOverlapAggiornate.value // Aggiungi questa riga
+	categorieOverlap.value = categorieOverlapAggiornate.value
 
 	closeAutomaticForm()
 }
 
-let draggedCategoria = null
-const dragTarget = ref(null)
+let draggedCategoria: Categoria | null = null
 
-const onDragStart = (categoria) => {
+const onDragStart = (categoria: Categoria) => {
 	draggedCategoria = categoria
 }
 
-const onDragOver = (categoria) => {
+const onDragOver = (categoria: Categoria) => {
 	dragTarget.value = categoria.id_categoria
 }
 
-const onDragLeave = (categoria) => {
+const onDragLeave = (categoria: Categoria) => {
 	if (dragTarget.value === categoria.id_categoria) {
 		dragTarget.value = null
 	}
 }
 
-const onDrop = async (targetCategoria) => {
+const onDrop = async (targetCategoria: Categoria) => {
 	dragTarget.value = null
 	if (
 		draggedCategoria &&
@@ -575,30 +570,24 @@ const onDrop = async (targetCategoria) => {
 		targetCategoria.n_ordine = tempOrder
 
 		// Aggiorna solo il campo n_ordine nel backend
-		await useFetch(`/api/categorie?id=${draggedCategoria.id_categoria}`, {
+		await useFetch(`/api/categorie`, {
 			method: "PUT",
+			query: { id: draggedCategoria.id_categoria },
 			body: { n_ordine: draggedCategoria.n_ordine },
 		})
-		await useFetch(`/api/categorie?id=${targetCategoria.id_categoria}`, {
+		await useFetch(`/api/categorie`, {
 			method: "PUT",
+			query: { id: targetCategoria.id_categoria },
 			body: { n_ordine: targetCategoria.n_ordine },
 		})
 
 		// Ricarica tutti i dati necessari
-		const [
-			{ data: categorieAggiornate },
-			{ data: categorieFasceAggiornate },
-			{ data: categorieCintureAggiornate },
-		] = await Promise.all([
-			useFetch("/api/categorie"),
-			useFetch("/api/vista_categorie_fasce"),
-			useFetch("/api/vista_categorie_cinture"),
+		const [{ data: categorieAggiornate }] = await Promise.all([
+			useFetch<Categoria[]>("/api/categorie"),
 		])
 
 		// Aggiorna tutti i riferimenti
 		categorie.value = categorieAggiornate.value
-		categorieFasce.value = categorieFasceAggiornate.value
-		categorieCinture.value = categorieCintureAggiornate.value
 
 		// Riapplica l'ordinamento corrente
 		if (sortKey.value) {
@@ -614,12 +603,10 @@ const onDrop = async (targetCategoria) => {
 	draggedCategoria = null
 }
 
-const hasOverlap = (id_categoria) => {
-	return categorieOverlap.value?.includes(id_categoria)
+const hasOverlap = (id_categoria?: number) => {
+	if (id_categoria === undefined) return false
+	return categorieOverlap.value?.includes(id_categoria) ?? false
 }
-
-const loading = ref(false)
-const loadingMessage = ref("")
 </script>
 
 <style scoped>
