@@ -82,7 +82,8 @@
 					</div>
 				</div>
 				<select
-					v-model="categoria.id_disciplina"
+					:value="categoria.disciplina?.id_disciplina"
+					@input="updateDisciplina"
 					class="border p-2 rounded w-full"
 				>
 					<option disabled value="" class="placeholder-option">
@@ -112,13 +113,15 @@
 					</option>
 				</select>
 				<input
-					v-model="categoria.peso_min"
+					:value="categoria.peso_min"
+					@input="(e) => updatePesoMin(e)"
 					type="number"
 					placeholder="Peso Minimo"
 					class="border p-2 rounded w-full"
 				/>
 				<input
-					v-model="categoria.peso_max"
+					:value="categoria.peso_max"
+					@input="(e) => updatePesoMax(e)"
 					type="number"
 					placeholder="Peso Massimo"
 					class="border p-2 rounded w-full"
@@ -250,54 +253,48 @@
 
 <script setup lang="ts">
 import { ref, watch, onMounted } from "vue"
-import type { PropType } from "vue"  // Modifica qui: importazione type-only di PropType
+import type { PropType } from "vue" // Modifica qui: importazione type-only di PropType
 import { useFetch } from "nuxt/app"
-import type {
-    Categoria,
-    Disciplina,
-    Fascia,
-    Cintura,
-    SessoOption
+import {
+	type Categoria,
+	type Disciplina,
+	type Fascia,
+	type Cintura,
+	type SessoOption, // Aggiungi l'importazione del tipo
+	getSessoOptions,
 } from "~/types/global"
 
-// Aggiungi tipo esplicito per la categoria con valori di default
-const defaultCategoria: Categoria = {
-    nome: '',
-    id_disciplina: '',
-    sesso: 'X',
-    peso_min: null,
-    peso_max: null,
-    n_ordine: null,
-    fasce: [],
-    cinture: []
-}
-
 const props = defineProps({
-    categoria: {
-        type: Object as PropType<Categoria>,
-        required: true,
-        default: () => ({...defaultCategoria})
-    },
-    discipline: {
-        type: Array as PropType<Disciplina[]>,
-        required: true
-    },
-    sessoOptions: {
-        type: Array as PropType<SessoOption[]>,
-        default: () => [
-            { value: 'M', label: 'Maschile' },
-            { value: 'F', label: 'Femminile' },
-            { value: 'X', label: 'Misto' }
-        ]
-    },
-    fasceEta: {
-        type: Array as PropType<Fascia[]>,
-        required: true
-    },
-    cinture: {
-        type: Array as PropType<Cintura[]>,
-        required: true
-    }
+	categoria: {
+		type: Object as PropType<Categoria>,
+		required: true,
+		default: () => ({
+			nome: "",
+			disciplina: undefined, // Modifica qui: rimuovi id_disciplina e usa disciplina
+			sesso: undefined,
+			peso_min: null,
+			peso_max: null,
+			n_ordine: null,
+			fasce: [],
+			cinture: [],
+		}),
+	},
+	discipline: {
+		type: Array as PropType<Disciplina[]>,
+		required: true,
+	},
+	sessoOptions: {
+		type: Array as PropType<SessoOption[]>,
+		default: () => getSessoOptions(),
+	},
+	fasceEta: {
+		type: Array as PropType<Fascia[]>,
+		required: true,
+	},
+	cinture: {
+		type: Array as PropType<Cintura[]>,
+		required: true,
+	},
 })
 
 const emit = defineEmits(["close", "save"])
@@ -308,144 +305,226 @@ const fasceSelezionate = ref<Fascia[]>([])
 const tempFasceDisponibili = ref<number[]>([])
 const tempFasceSelezionate = ref<number[]>([])
 
-const cintureDisponibili = ref<Cintura[]>([])
-const cintureSelezionate = ref<Cintura[]>([])
+const cintureDisponibili = ref<WithId[]>([])
+const cintureSelezionate = ref<WithId[]>([])
 const tempCintureDisponibili = ref<number[]>([])
 const tempCintureSelezionate = ref<number[]>([])
 
 // Tipizza la funzione sortById
-const sortById = (a: any, b: any, idField: string) => a[idField] - b[idField]
-
-// Type guards
-const isFasciaWithId = (fascia: Fascia): fascia is Fascia & { id_fascia: number } => {
-    return fascia.id_fascia !== undefined;
+interface WithId {
+	[key: string]: unknown
+	id_fascia?: number
+	id_cintura?: number
 }
 
-const isCinturaWithId = (cintura: Cintura): cintura is Cintura & { id_cintura: number } => {
-    return cintura.id_cintura !== undefined;
+interface SortableItem extends WithId {
+	id_fascia?: number
+	id_cintura?: number
 }
 
-onMounted(() => {
-	fasceDisponibili.value = [...props.fasceEta].sort((a, b) =>
-		sortById(a, b, "id_fascia")
+// Sostituisci la funzione sortById con una versione type-safe
+const sortById = <T extends SortableItem>(
+	a: T,
+	b: T,
+	idField: keyof T
+): number => {
+	const valueA = a[idField]
+	const valueB = b[idField]
+	if (typeof valueA === "number" && typeof valueB === "number") {
+		return valueA - valueB
+	}
+	return 0
+}
+
+// Type guards migliorati per gestire gli ID
+const isFasciaWithId = (
+	fascia: Fascia
+): fascia is Required<Pick<Fascia, "id_fascia">> & Fascia => {
+	return typeof fascia.id_fascia === "number"
+}
+
+const isCinturaWithId = (
+	cintura: Cintura
+): cintura is Required<Pick<Cintura, "id_cintura">> & Cintura => {
+	return typeof cintura.id_cintura === "number"
+}
+
+// Helper function per il confronto degli ID
+const hasSameId = <T extends { id_fascia?: number } | { id_cintura?: number }>(
+	a: T,
+	b: T
+): boolean => {
+	if ("id_fascia" in a && "id_fascia" in b) {
+		return a.id_fascia === b.id_fascia
+	}
+	if ("id_cintura" in a && "id_cintura" in b) {
+		return a.id_cintura === b.id_cintura
+	}
+	return false
+}
+
+// Aggiorna la funzione filterFasce per usare il tipo Fascia
+const filterFasce = (fasce: Fascia[], ids: number[]): Fascia[] => {
+	return fasce.filter((f) => isFasciaWithId(f) && ids.includes(f.id_fascia))
+}
+
+const filterCinture = (cinture: WithId[], ids: number[]): WithId[] => {
+	return cinture.filter(
+		(c) => isCinturaWithId(c) && ids.includes(c.id_cintura!)
 	)
-	cintureDisponibili.value = [...props.cinture].sort((a, b) =>
-		sortById(a, b, "id_cintura")
-	)
+}
+
+// Helper functions per controllare gli array
+const hasItems = <T>(arr: T[] | undefined): arr is T[] => {
+	return Array.isArray(arr) && arr.length > 0
+}
+
+onMounted(async () => {
+	// Recupera le fasce dal backend
+	const { data: fascheData } = await useFetch<Fascia[]>("/api/fasce")
+	if (fascheData.value) {
+		fasceDisponibili.value = fascheData.value
+		fasceDisponibili.value.sort((a, b) => {
+			return (a.id_fascia || 0) - (b.id_fascia || 0)
+		})
+	}
+
+	cintureDisponibili.value = [...props.cinture].map((c) => ({
+		...c,
+		id_cintura: c.id_cintura,
+	})) as WithId[]
+	cintureDisponibili.value.sort((a, b) => sortById(a, b, "id_cintura"))
+
 	// Inizializza categoria.id_disciplina se non è già definito
-	if (!props.categoria.id_disciplina) {
-		props.categoria.id_disciplina = ""
+	if (!props.categoria.disciplina) {
+		props.categoria.disciplina = { id_disciplina: "", valore: "" }
 	}
 
 	// Popola le liste selezionate se ci sono fasce e cinture
 	const fasce = props.categoria.fasce ?? []
-    const cinture = props.categoria.cinture ?? []
+	const cinture = props.categoria.cinture ?? []
 
-    if (fasce.length > 0) {
-        fasceSelezionate.value = props.fasceEta.filter((f) =>
-            isFasciaWithId(f) && fasce.some(fascia => isFasciaWithId(fascia) && fascia.id_fascia === f.id_fascia)
-        )
-        fasceDisponibili.value = fasceDisponibili.value.filter((f) =>
-            isFasciaWithId(f) && !fasce.some(fascia => isFasciaWithId(fascia) && fascia.id_fascia === f.id_fascia)
-        )
-    }
+	// Aggiorna la gestione delle fasce nella categoria
+	if (props.categoria.fasce && props.categoria.fasce.length > 0) {
+		const fasceIds = props.categoria.fasce
+			.filter(isFasciaWithId)
+			.map((f) => f.id_fascia)
 
-    if (cinture.length > 0) {
-        cintureSelezionate.value = props.cinture.filter((c) =>
-            isCinturaWithId(c) && cinture.some(cintura => isCinturaWithId(cintura) && cintura.id_cintura === c.id_cintura)
-        )
-        cintureDisponibili.value = cintureDisponibili.value.filter((c) =>
-            isCinturaWithId(c) && !cinture.some(cintura => isCinturaWithId(cintura) && cintura.id_cintura === c.id_cintura)
-        )
-    }
+		fasceSelezionate.value = filterFasce(fasceDisponibili.value, fasceIds)
+
+		fasceDisponibili.value = fasceDisponibili.value.filter(
+			(f) => isFasciaWithId(f) && !fasceIds.includes(f.id_fascia)
+		)
+	}
+
+	if (hasItems(cinture)) {
+		const cintureIds = cinture
+			.filter(isCinturaWithId)
+			.map((c) => c.id_cintura)
+		cintureSelezionate.value = filterCinture(
+			props.cinture.map((c) => ({ ...c, id_cintura: c.id_cintura })),
+			cintureIds
+		)
+		cintureDisponibili.value = props.cinture
+			.filter(
+				(c) => isCinturaWithId(c) && !cintureIds.includes(c.id_cintura)
+			)
+			.map((c) => ({ ...c, id_cintura: c.id_cintura })) as WithId[]
+	}
+
+	// Inizializza la disciplina se non è già definita
+	if (!props.categoria.disciplina && props.categoria.id_disciplina) {
+		const selectedDisciplina = props.discipline.find(
+			(d) => d.id_disciplina === props.categoria.id_disciplina
+		)
+		if (selectedDisciplina) {
+			props.categoria.disciplina = {
+				id_disciplina: selectedDisciplina.id_disciplina!,
+				valore: selectedDisciplina.valore!,
+			}
+		}
+	}
 })
+
+// Aggiungi questa funzione nello script setup
+const updateDisciplina = (e: Event) => {
+	const input = e.target as HTMLSelectElement
+	const selectedDisciplina = props.discipline.find(
+		(d) => d.id_disciplina === input.value
+	)
+	if (selectedDisciplina) {
+		props.categoria.disciplina = {
+			id_disciplina: selectedDisciplina.id_disciplina!,
+			valore: selectedDisciplina.valore!,
+		}
+	} else {
+		props.categoria.disciplina = undefined
+	}
+}
 
 // Aggiungi questo watch per gestire i cambiamenti della categoria
 watch(
 	() => props.categoria,
 	(newCategoria) => {
 		const fasce = newCategoria.fasce ?? []
-        const cinture = newCategoria.cinture ?? []
+		const cinture = newCategoria.cinture ?? []
 
-        if (fasce.length > 0) {
-            fasceSelezionate.value = props.fasceEta.filter((f) =>
-                isFasciaWithId(f) && fasce.some(fascia => isFasciaWithId(fascia) && fascia.id_fascia === f.id_fascia)
-            )
-            fasceDisponibili.value = props.fasceEta.filter(
-                (f) => isFasciaWithId(f) && !fasce.some(fascia => isFasciaWithId(fascia) && fascia.id_fascia === f.id_fascia)
-            )
-        }
+		if (hasItems(fasce)) {
+			fasceSelezionate.value = props.fasceEta
+				.filter(
+					(f) =>
+						isFasciaWithId(f) &&
+						fasce.some(
+							(fascia) =>
+								isFasciaWithId(fascia) &&
+								fascia.id_fascia === f.id_fascia
+						)
+				)
+				.map((f) => ({ ...f, id_fascia: f.id_fascia })) as WithId[]
+			fasceDisponibili.value = props.fasceEta
+				.filter(
+					(f) =>
+						isFasciaWithId(f) &&
+						!fasce.some(
+							(fascia) =>
+								isFasciaWithId(fascia) &&
+								fascia.id_fascia === f.id_fascia
+						)
+				)
+				.map((f) => ({ ...f, id_fascia: f.id_fascia })) as WithId[]
+		}
 
-        if (cinture.length > 0) {
-            cintureSelezionate.value = props.cinture.filter((c) =>
-                isCinturaWithId(c) && cinture.some(cintura => isCinturaWithId(cintura) && cintura.id_cintura === c.id_cintura)
-            )
-            cintureDisponibili.value = props.cinture.filter(
-                (c) => isCinturaWithId(c) && !cinture.some(cintura => isCinturaWithId(cintura) && cintura.id_cintura === c.id_cintura)
-            )
-        }
+		if (hasItems(cinture)) {
+			cintureSelezionate.value = props.cinture
+				.filter(
+					(c) =>
+						isCinturaWithId(c) &&
+						cinture.some(
+							(cintura) =>
+								isCinturaWithId(cintura) &&
+								cintura.id_cintura === c.id_cintura
+						)
+				)
+				.map((c) => ({ ...c, id_cintura: c.id_cintura })) as WithId[]
+			cintureDisponibili.value = props.cinture
+				.filter(
+					(c) =>
+						isCinturaWithId(c) &&
+						!cinture.some(
+							(cintura) =>
+								isCinturaWithId(cintura) &&
+								cintura.id_cintura === c.id_cintura
+						)
+				)
+				.map((c) => ({ ...c, id_cintura: c.id_cintura })) as WithId[]
+		}
 	},
 	{ deep: true }
 )
 
-// Modifica la funzione aggiungiFasce per gestire possibili undefined
-const aggiungiFasce = () => {
-    if (!tempFasceDisponibili.value.length) return
-
-    const selezionate = fasceDisponibili.value.filter((fascia) => {
-        return isFasciaWithId(fascia) && tempFasceDisponibili.value.includes(fascia.id_fascia)
-    })
-    fasceSelezionate.value.push(...selezionate)
-	fasceSelezionate.value.sort((a, b) => sortById(a, b, "id_fascia"))
-
-	fasceDisponibili.value = fasceDisponibili.value.filter(
-		(fascia) => !tempFasceDisponibili.value.includes(fascia.id_fascia)
-	)
-	tempFasceDisponibili.value = []
-}
-
-const rimuoviFasce = () => {
-    const selezionate = fasceSelezionate.value.filter((fascia) => {
-        return isFasciaWithId(fascia) && tempFasceSelezionate.value.includes(fascia.id_fascia)
-    })
-	fasceDisponibili.value.push(...selezionate)
-	fasceDisponibili.value.sort((a, b) => sortById(a, b, "id_fascia"))
-
-	fasceSelezionate.value = fasceSelezionate.value.filter(
-		(fascia) => !tempFasceSelezionate.value.includes(fascia.id_fascia)
-	)
-	tempFasceSelezionate.value = []
-}
-
-const aggiungiCinture = () => {
-    const selezionate = cintureDisponibili.value.filter((cintura) => {
-        return isCinturaWithId(cintura) && tempCintureDisponibili.value.includes(cintura.id_cintura)
-    })
-	cintureSelezionate.value.push(...selezionate)
-	cintureSelezionate.value.sort((a, b) => sortById(a, b, "id_cintura"))
-
-	cintureDisponibili.value = cintureDisponibili.value.filter(
-		(cintura) => !tempCintureDisponibili.value.includes(cintura.id_cintura)
-	)
-	tempCintureDisponibili.value = []
-}
-
-const rimuoviCinture = () => {
-    const selezionate = cintureSelezionate.value.filter((cintura) => {
-        return isCinturaWithId(cintura) && tempCintureSelezionate.value.includes(cintura.id_cintura)
-    })
-	cintureDisponibili.value.push(...selezionate)
-	cintureDisponibili.value.sort((a, b) => sortById(a, b, "id_cintura"))
-
-	cintureSelezionate.value = cintureSelezionate.value.filter(
-		(cintura) => !tempCintureSelezionate.value.includes(cintura.id_cintura)
-	)
-	tempCintureSelezionate.value = []
-}
-
 watch(
 	() => [
-		props.categoria.id_disciplina,
+		props.categoria.disciplina?.id_disciplina,
 		props.categoria.sesso,
 		props.categoria.peso_min,
 		props.categoria.peso_max,
@@ -460,17 +539,18 @@ watch(
 	{ deep: true } // Aggiungi questa opzione
 )
 
-// Modifica la funzione generaNomeCategoria per gestire possibili undefined
+// Modifica la funzione generaNomeCategoria per gestire correttamente i valori undefined
 const generaNomeCategoria = () => {
-    const disciplina = props.discipline.find(
-        (d) => d.id_disciplina === props.categoria.id_disciplina
-    )?.valore ?? ''
+	const disciplina =
+		props.discipline.find(
+			(d) => d.id_disciplina === props.categoria.disciplina?.id_disciplina
+		)?.valore || ""
 
-    const sesso = props.sessoOptions.find(
-        (s) => s.value === props.categoria.sesso
-    )?.label ?? ''
+	const sesso =
+		props.sessoOptions.find((s) => s.value === props.categoria.sesso)
+			?.label || ""
 
-    const pesoMin = props.categoria.peso_min
+	const pesoMin = props.categoria.peso_min
 		? `+${props.categoria.peso_min}Kg`
 		: ""
 	const pesoMax = props.categoria.peso_max
@@ -496,69 +576,6 @@ const generaNomeCategoria = () => {
 	props.categoria.nome = parts.filter(Boolean).join(" ")
 }
 
-// Aggiungi controlli null/undefined nelle funzioni che manipolano gli array
-const handleSave = async () => {
-	try {
-		const fasceIds = fasceSelezionate.value
-            .filter(isFasciaWithId)
-            .map(f => f.id_fascia)
-
-        const cintureIds = cintureSelezionate.value
-            .filter(isCinturaWithId)
-            .map(c => c.id_cintura)
-
-		// Assegna automaticamente n_ordine se è una nuova categoria
-		if (!props.categoria.id_categoria) {
-			let maxNOrdine = 0
-			try {
-				const response = await fetch("/api/categorie?fields=n_ordine")
-				const categorieEsistenti = await response.json()
-				maxNOrdine = Math.max(
-					0,
-					...categorieEsistenti.map((c) => c.n_ordine || 0)
-				)
-			} catch (error) {
-				console.error("Errore nel recupero di n_ordine:", error)
-			}
-			props.categoria.n_ordine = maxNOrdine + 1
-		}
-
-		const categoriaData = {
-			...props.categoria,
-			fasce: fasceIds,
-			cinture: cintureIds,
-			if (!props.categoria.nome || !props.categoria.id_disciplina || !props.categoria.sesso) {
-				throw new Error('Campi obbligatori mancanti')
-			}
-		}
-
-		const response = await fetch(
-			`/api/categorie${
-				categoriaData.id_categoria
-					? `?id=${categoriaData.id_categoria}`
-					: ""
-			}`,
-			{
-				method: categoriaData.id_categoria ? "PUT" : "POST",
-				headers: {
-					"Content-Type": "application/json",
-				},
-				body: JSON.stringify(categoriaData),
-			}
-		)
-
-		if (!response.ok) {
-			throw new Error(`HTTP error! status: ${response.status}`)
-		}
-
-		const savedCategoria = await response.json()
-		emit("save", savedCategoria)
-		close()
-	} catch (error) {
-		console.error("Errore nel salvataggio della categoria:", error)
-	}
-}
-
 const close = () => {
 	emit("close")
 }
@@ -571,55 +588,6 @@ const nomeFields = ref({
 	fasce: true,
 	cinture: true,
 })
-
-const generateNome = () => {
-	if (!autoNomeEnabled.value) return
-
-	const parts = []
-
-	if (nomeFields.value.disciplina && props.categoria.id_disciplina) {
-		const disciplina = props.discipline.find(
-			(d) => d.id_disciplina === props.categoria.id_disciplina
-		)
-		if (disciplina) parts.push(disciplina.nome)
-	}
-
-	if (nomeFields.value.sesso && props.categoria.sesso) {
-		const sessoLabel = props.sessoOptions.find(
-			s => s.value === props.categoria.sesso
-		)?.label
-		if (sessoLabel) parts.push(sessoLabel)
-	}
-
-	if (
-		nomeFields.value.peso &&
-		(props.categoria.peso_min || props.categoria.peso_max)
-	) {
-		const peso = `${props.categoria.peso_min || "0"}-${
-			props.categoria.peso_max || "∞"
-		}kg`
-		parts.push(peso)
-	}
-
-	if (nomeFields.value.fasce && props.categoria.fasce?.length > 0) {
-		const fasceDes = props.categoria.fasce
-			.map(
-				(id) =>
-					props.fasceEta.find((f) => f.id_fascia === id)?.descrizione
-			)
-			.filter(Boolean)
-		if (fasceDes.length) parts.push(fasceDes.join("/"))
-	}
-
-	if (nomeFields.value.cinture && props.categoria.cinture?.length > 0) {
-		const cintureCol = props.categoria.cinture
-			.map((id) => props.cinture.find((c) => c.id_cintura === id)?.colore)
-			.filter(Boolean)
-		if (cintureCol.length) parts.push(cintureCol.join("/"))
-	}
-
-	props.categoria.nome = parts.join(" ")
-}
 
 // Osserva i cambiamenti dei campi rilevanti per aggiornare il nome
 watch(
@@ -635,8 +603,226 @@ watch(
 		if (autoNomeEnabled.value) {
 			generateNome()
 		}
-	}
+	},
+	{ deep: true }
 )
+
+interface HasId {
+	id_fascia?: number
+	id_cintura?: number
+}
+
+const getValidId = (item: HasId): number | null => {
+	if ("id_fascia" in item && typeof item.id_fascia === "number") {
+		return item.id_fascia
+	}
+	if ("id_cintura" in item && typeof item.id_cintura === "number") {
+		return item.id_cintura
+	}
+	return null
+}
+
+const filterByIds = <T extends HasId>(items: T[], ids: number[]): T[] => {
+	return items.filter((item) => {
+		const id = getValidId(item)
+		return id !== null && ids.includes(id)
+	})
+}
+
+const filterOutByIds = <T extends HasId>(items: T[], ids: number[]): T[] => {
+	return items.filter((item) => {
+		const id = getValidId(item)
+		return id !== null && !ids.includes(id)
+	})
+}
+
+const aggiungiFasce = () => {
+	if (!tempFasceDisponibili.value.length) return
+
+	const validIds = tempFasceDisponibili.value.filter(
+		(id): id is number => typeof id === "number"
+	)
+	const selezionate = filterByIds(fasceDisponibili.value, validIds)
+
+	fasceSelezionate.value = [...fasceSelezionate.value, ...selezionate].sort(
+		(a, b) => sortById(a, b, "id_fascia")
+	)
+
+	fasceDisponibili.value = filterOutByIds(fasceDisponibili.value, validIds)
+	tempFasceDisponibili.value = []
+}
+
+const rimuoviFasce = () => {
+	const validIds = tempFasceSelezionate.value.filter(
+		(id): id is number => typeof id === "number"
+	)
+	const selezionate = filterByIds(fasceSelezionate.value, validIds)
+
+	fasceDisponibili.value = [...fasceDisponibili.value, ...selezionate].sort(
+		(a, b) => sortById(a, b, "id_fascia")
+	)
+
+	fasceSelezionate.value = filterOutByIds(fasceSelezionate.value, validIds)
+	tempFasceSelezionate.value = []
+}
+
+// Applica lo stesso pattern per le cinture
+const aggiungiCinture = () => {
+	if (!tempCintureDisponibili.value.length) return
+
+	const validIds = tempCintureDisponibili.value.filter(
+		(id): id is number => typeof id === "number"
+	)
+	const selezionate = filterByIds(cintureDisponibili.value, validIds)
+
+	cintureSelezionate.value = [
+		...cintureSelezionate.value,
+		...selezionate,
+	].sort((a, b) => sortById(a, b, "id_cintura"))
+
+	cintureDisponibili.value = filterOutByIds(
+		cintureDisponibili.value,
+		validIds
+	)
+	tempCintureDisponibili.value = []
+}
+
+const rimuoviCinture = () => {
+	const validIds = tempCintureSelezionate.value.filter(
+		(id): id is number => typeof id === "number"
+	)
+	const selezionate = filterByIds(cintureSelezionate.value, validIds)
+
+	cintureDisponibili.value = [
+		...cintureDisponibili.value,
+		...selezionate,
+	].sort((a, b) => sortById(a, b, "id_cintura"))
+
+	cintureSelezionate.value = filterOutByIds(
+		cintureSelezionate.value,
+		validIds
+	)
+	tempCintureSelezionate.value = []
+}
+
+const handleSave = async () => {
+	try {
+		const fasceIds = fasceSelezionate.value
+			.filter(isFasciaWithId)
+			.map((f) => f.id_fascia)
+
+		const cintureIds = cintureSelezionate.value
+			.map((c) => getValidId(c))
+			.filter((id): id is number => id !== null)
+
+		// Prepara i dati della categoria per il salvataggio
+		const disciplina = props.categoria.disciplina
+			? {
+					id_disciplina: props.categoria.disciplina.id_disciplina,
+					valore: props.discipline.find(
+						(d) =>
+							d.id_disciplina ===
+							props.categoria.disciplina?.id_disciplina
+					)?.valore,
+			  }
+			: undefined
+
+		const categoriaToSave = {
+			...props.categoria,
+			disciplina,
+			fasce: fasceIds,
+			cinture: cintureIds,
+		}
+
+		// Determina se è un nuovo inserimento o una modifica
+		const method = props.categoria.id_categoria ? "PUT" : "POST"
+		const query = props.categoria.id_categoria
+			? { id: props.categoria.id_categoria }
+			: undefined
+
+		// Effettua la richiesta al backend
+		const { data } = await useFetch("/api/categorie", {
+			method,
+			query,
+			body: categoriaToSave,
+		})
+
+		// Emetti l'evento save con i dati aggiornati
+		if (data.value) {
+			emit("save", data.value)
+		}
+	} catch (error) {
+		console.error("Errore nel salvataggio della categoria:", error)
+	}
+}
+
+const updatePesoMin = (e: Event) => {
+	const input = e.target as HTMLInputElement
+	props.categoria.peso_min = input.value === "" ? null : Number(input.value)
+}
+
+const updatePesoMax = (e: Event) => {
+	const input = e.target as HTMLInputElement
+	props.categoria.peso_max = input.value === "" ? null : Number(input.value)
+}
+
+const generateNome = () => {
+	if (!autoNomeEnabled.value) return
+
+	const parts: string[] = []
+
+	if (
+		nomeFields.value.disciplina &&
+		props.categoria.disciplina?.id_disciplina
+	) {
+		const disciplina =
+			props.categoria.disciplina.valore ||
+			props.discipline.find(
+				(d) =>
+					d.id_disciplina ===
+					props.categoria.disciplina?.id_disciplina
+			)?.valore ||
+			""
+		if (disciplina) {
+			parts.push(disciplina)
+		}
+	}
+
+	if (nomeFields.value.sesso && props.categoria.sesso) {
+		const sessoLabel =
+			props.sessoOptions.find((s) => s.value === props.categoria.sesso)
+				?.label || ""
+		if (sessoLabel) {
+			parts.push(sessoLabel)
+		}
+	}
+
+	if (nomeFields.value.peso) {
+		const pesoMin = props.categoria.peso_min ?? 0
+		const pesoMax = props.categoria.peso_max ?? "∞"
+		const peso = `${pesoMin}-${pesoMax}kg`
+		parts.push(peso)
+	}
+
+	if (nomeFields.value.fasce && fasceSelezionate.value.length > 0) {
+		const fasceDesc = fasceSelezionate.value
+			.filter((f) => f.descrizione)
+			.map((f) => f.descrizione)
+			.join(", ")
+		if (fasceDesc) {
+			parts.push(fasceDesc)
+		}
+	}
+
+	if (nomeFields.value.cinture && cintureSelezionate.value.length > 0) {
+		const cintureDesc = cintureSelezionate.value
+			.map((c) => c.colore)
+			.join(", ")
+		parts.push(cintureDesc)
+	}
+
+	props.categoria.nome = parts.join(" ")
+}
 </script>
 
 <style scoped>

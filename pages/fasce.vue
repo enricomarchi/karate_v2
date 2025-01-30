@@ -212,103 +212,87 @@
 	</div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed } from "vue"
-import { useFetch } from "#app"
+import type { Fascia } from "~/types/global"
+import { useFetch } from "nuxt/app"
 
-const ageRange = ref({
-	id_fascia: null,
+const ageRange = ref<Fascia>({
+	id_fascia: undefined,
 	descrizione: "",
-	anno_nascita_min: null,
-	anno_nascita_max: null,
+	anno_nascita_min: undefined,
+	anno_nascita_max: undefined,
 })
 
 const formVisible = ref(false)
-
-// Effettua il fetch dei dati direttamente nello setup
-const { data: ageRanges, error } = useFetch("/api/fasce-eta")
-
 const loading = ref(false)
 const loadingMessage = ref("")
 const feedbackMessage = ref("")
 const feedbackType = ref("")
 
+// Stato per il sorting
+const sortKey = ref("")
+const sortAsc = ref(true)
+
+// Stato per la selezione multipla
+const selectedAgeRanges = ref<number[]>([])
+
+// Effettua il fetch dei dati direttamente nello setup
+const { data: ageRanges } = await useFetch<Fascia[]>("/api/fasce")
+
 const appendYearsToTitle = ref(true)
 
-// Aggiungi questa computed property
-const previewTitle = computed(() => {
-	if (appendYearsToTitle.value && ageRange.value.descrizione) {
-		if (
-			ageRange.value.anno_nascita_min &&
-			ageRange.value.anno_nascita_max
-		) {
-			return `${ageRange.value.descrizione} (${ageRange.value.anno_nascita_min}-${ageRange.value.anno_nascita_max})`
-		} else {
-			return `${ageRange.value.descrizione} (...-...)`
-		}
-	}
-	return ageRange.value.descrizione
-})
-
-// Modifica la funzione saveAgeRange per utilizzare previewTitle
+// Modifica la funzione saveAgeRange per utilizzare la nuova API
 const saveAgeRange = async () => {
 	loading.value = true
 	loadingMessage.value = "Salvataggio in corso..."
 	document.body.style.cursor = "wait"
 
 	try {
-		const dataToSave = {
-			...ageRange.value,
-			descrizione: appendYearsToTitle.value
-				? previewTitle.value
-				: ageRange.value.descrizione,
+		// Aggiorna la descrizione con gli anni se l'opzione è selezionata
+		if (appendYearsToTitle.value) {
+			ageRange.value.descrizione = previewTitle.value
 		}
 
 		if (ageRange.value.id_fascia) {
-			const { error } = await useFetch(
-				`/api/fasce-eta?id=${ageRange.value.id_fascia}`,
-				{
-					method: "PUT",
-					body: dataToSave,
-				}
-			)
-			if (error.value) {
-				console.error(
-					"Errore nel salvataggio della fascia d'età:",
-					error.value
-				)
-				feedbackMessage.value = "Errore durante il salvataggio"
-				feedbackType.value = "error"
-			} else {
-				const index = ageRanges.value.findIndex(
+			// UPDATE
+			const { data, error } = await useFetch(`/api/fasce`, {
+				method: "PUT",
+				query: { id: ageRange.value.id_fascia },
+				body: ageRange.value,
+			})
+
+			if (error.value) throw error.value
+
+			if (data.value) {
+				const index = ageRanges.value?.findIndex(
 					(ar) => ar.id_fascia === ageRange.value.id_fascia
 				)
-				ageRanges.value[index] = { ...ageRange.value }
-				feedbackMessage.value = "Fascia salvata con successo"
-				feedbackType.value = "success"
+				if (index !== undefined && index !== -1 && ageRanges.value) {
+					ageRanges.value[index] = data.value as Fascia
+				}
 			}
 		} else {
-			const { data, error } = await useFetch("/api/fasce-eta", {
+			// CREATE
+			const { data, error } = await useFetch("/api/fasce", {
 				method: "POST",
-				body: dataToSave,
+				body: ageRange.value,
 			})
-			if (error.value) {
-				console.error(
-					"Errore nel salvataggio della fascia d'età:",
-					error.value
-				)
-				feedbackMessage.value = "Errore durante il salvataggio"
-				feedbackType.value = "error"
-			} else {
-				ageRanges.value.push(data.value)
-				feedbackMessage.value = "Fascia salvata con successo"
-				feedbackType.value = "success"
+
+			if (error.value) throw error.value
+
+			if (data.value && ageRanges.value) {
+				ageRanges.value.push(data.value as Fascia)
 			}
 		}
+
+		feedbackMessage.value = "Fascia salvata con successo"
+		feedbackType.value = "success"
 		closeForm()
 	} catch (error) {
 		console.error("Errore nel salvataggio della fascia d'età:", error)
-		feedbackMessage.value = "Errore durante il salvataggio"
+		feedbackMessage.value =
+			(error as Error).message || "Errore durante il salvataggio"
 		feedbackType.value = "error"
 	} finally {
 		loading.value = false
@@ -319,37 +303,30 @@ const saveAgeRange = async () => {
 	}
 }
 
-const editAgeRange = (ar) => {
-	ageRange.value = { ...ar }
-	formVisible.value = true
-}
-
-const deleteAgeRange = async (id_fascia) => {
+const deleteAgeRange = async (id_fascia: number) => {
 	loading.value = true
 	loadingMessage.value = "Eliminazione in corso..."
 	document.body.style.cursor = "wait"
 
 	try {
-		const { error } = await useFetch(`/api/fasce-eta?id=${id_fascia}`, {
+		const { error } = await useFetch(`/api/fasce`, {
 			method: "DELETE",
+			query: { id: id_fascia },
 		})
-		if (error.value) {
-			console.error(
-				"Errore nella cancellazione della fascia d'età:",
-				error.value
-			)
-			feedbackMessage.value = "Errore durante l'eliminazione"
-			feedbackType.value = "error"
-		} else {
+
+		if (error.value) throw error.value
+
+		if (ageRanges.value) {
 			ageRanges.value = ageRanges.value.filter(
 				(ar) => ar.id_fascia !== id_fascia
 			)
-			feedbackMessage.value = "Fascia eliminata con successo"
-			feedbackType.value = "success"
 		}
+		feedbackMessage.value = "Fascia eliminata con successo"
+		feedbackType.value = "success"
 	} catch (error) {
 		console.error("Errore nella cancellazione della fascia d'età:", error)
-		feedbackMessage.value = "Errore durante l'eliminazione"
+		feedbackMessage.value =
+			(error as Error).message || "Errore durante l'eliminazione"
 		feedbackType.value = "error"
 	} finally {
 		loading.value = false
@@ -360,8 +337,37 @@ const deleteAgeRange = async (id_fascia) => {
 	}
 }
 
-const sortKey = ref("")
-const sortAsc = ref(true)
+// Computed property per il preview del titolo
+const previewTitle = computed(() => {
+	if (appendYearsToTitle.value && ageRange.value.descrizione) {
+		return `${ageRange.value.descrizione} (${
+			ageRange.value.anno_nascita_min || "..."
+		}-${ageRange.value.anno_nascita_max || "..."})`
+	}
+	return ageRange.value.descrizione
+})
+
+const editAgeRange = (ar: Fascia) => {
+	ageRange.value = { ...ar }
+	formVisible.value = true
+}
+
+const deleteSelectedAgeRanges = async () => {
+	for (const id_fascia of selectedAgeRanges.value) {
+		await deleteAgeRange(id_fascia)
+	}
+	selectedAgeRanges.value = []
+}
+
+const copySelectedAgeRanges = () => {
+	if (!ageRanges.value) return
+
+	const selected = ageRanges.value.filter((ar) =>
+		selectedAgeRanges.value.includes(ar.id_fascia ?? -1)
+	)
+	navigator.clipboard.writeText(JSON.stringify(selected))
+	alert("Fasce d'età copiate negli appunti!")
+}
 
 const sortTable = (key) => {
 	if (sortKey.value === key) {
@@ -377,8 +383,6 @@ const sortTable = (key) => {
 	})
 }
 
-const selectedAgeRanges = ref([])
-
 const toggleAgeRangeSelection = (id_fascia) => {
 	const index = selectedAgeRanges.value.indexOf(id_fascia)
 	if (index === -1) {
@@ -388,21 +392,6 @@ const toggleAgeRangeSelection = (id_fascia) => {
 	}
 }
 
-const deleteSelectedAgeRanges = async () => {
-	for (const id_fascia of selectedAgeRanges.value) {
-		await deleteAgeRange(id_fascia)
-	}
-	selectedAgeRanges.value = []
-}
-
-const copySelectedAgeRanges = () => {
-	const selected = ageRanges.value.filter((ar) =>
-		selectedAgeRanges.value.includes(ar.id_fascia)
-	)
-	navigator.clipboard.writeText(JSON.stringify(selected))
-	alert("Fasce d'età copiate negli appunti!")
-}
-
 const openForm = () => {
 	formVisible.value = true
 }
@@ -410,10 +399,10 @@ const openForm = () => {
 const closeForm = () => {
 	formVisible.value = false
 	ageRange.value = {
-		id_fascia: null,
+		id_fascia: undefined,
 		descrizione: "",
-		anno_nascita_min: null,
-		anno_nascita_max: null,
+		anno_nascita_min: undefined,
+		anno_nascita_max: undefined,
 	}
 }
 

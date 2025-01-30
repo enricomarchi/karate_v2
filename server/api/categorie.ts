@@ -1,4 +1,4 @@
-import { getConnection } from "../../utils/db"
+import { getConnection } from "../utils/db"
 import {
 	defineEventHandler,
 	getQuery,
@@ -12,6 +12,7 @@ import type {
 	FasciaRow,
 	CinturaRow,
 	MySQLError,
+	Disciplina,
 } from "~/types/global"
 import type { ResultSetHeader, PoolConnection } from "mysql2/promise"
 
@@ -53,12 +54,25 @@ export default defineEventHandler(async (event) => {
 					})
 				}
 
-				// Combina i risultati
-				return {
+				// Trasforma i dati dal database nel formato dell'interfaccia Categoria
+				const categoriaWithDisciplina = {
 					...rows[0],
-					fasce: fasce,
-					cinture: cinture,
+					disciplina:
+						rows[0].disciplina_id && rows[0].disciplina_valore
+							? {
+									id_disciplina: rows[0].disciplina_id,
+									valore: rows[0].disciplina_valore,
+							  }
+							: undefined,
+					fasce,
+					cinture,
 				}
+
+				// Rimuovi i campi extra che non fanno parte dell'interfaccia Categoria
+				const { disciplina_id, disciplina_valore, ...result } =
+					categoriaWithDisciplina
+
+				return result
 			} else {
 				const [rows] = await connection.execute<CategoriaRow[]>(
 					"SELECT * FROM dettaglio_categorie"
@@ -87,22 +101,35 @@ export default defineEventHandler(async (event) => {
 			}
 		} else if (method === "POST") {
 			const categoriaInput = await readBody<Categoria>(event)
-			const { fasce, cinture } = categoriaInput // Destrutturiamo solo ciò che usiamo
+			// Estrai solo l'id dalla disciplina se presente, altrimenti usa id_disciplina direttamente
+			const id_disciplina =
+				categoriaInput.disciplina?.id_disciplina ||
+				categoriaInput.id_disciplina
+			const { fasce, cinture } = categoriaInput
 
 			// Start transaction
 			await connection.beginTransaction()
 
 			try {
+				// Se n_ordine non è specificato, trova il massimo disponibile e aggiunge 1
+				if (!categoriaInput.n_ordine) {
+					const [rows] = await connection.execute<CategoriaRow[]>(
+						"SELECT MAX(n_ordine) as max_order FROM categorie WHERE n_ordine IS NOT NULL"
+					)
+					const maxOrder = rows[0]?.max_order
+					categoriaInput.n_ordine = maxOrder ? maxOrder + 1 : 1
+				}
+
 				// Insert main category data
 				const [result] = await connection.execute<ResultSetHeader>(
 					"INSERT INTO categorie (nome, id_disciplina, sesso, peso_min, peso_max, n_ordine) VALUES (?, ?, ?, ?, ?, ?)",
 					[
 						categoriaInput.nome || null,
-						categoriaInput.id_disciplina || null,
+						id_disciplina || null,
 						categoriaInput.sesso || null,
-						categoriaInput.peso_min || null,
-						categoriaInput.peso_max || null,
-						categoriaInput.n_ordine || null,
+						categoriaInput.peso_min ?? null, // Ensure null is used instead of undefined
+						categoriaInput.peso_max ?? null, // Ensure null is used instead of undefined
+						categoriaInput.n_ordine,
 					]
 				)
 
@@ -174,29 +201,36 @@ export default defineEventHandler(async (event) => {
 			}
 
 			const updateData = await readBody<Categoria>(event)
-			const { fasce, cinture, ...categoriaData } = updateData
+			const { fasce, cinture, disciplina, ...categoriaData } = updateData
 
 			// Start transaction
 			await connection.beginTransaction()
 
 			try {
 				// Update main category data if there are fields to update
-				if (Object.keys(categoriaData).length > 0) {
+				if (Object.keys(categoriaData).length > 0 || disciplina) {
 					const updateFields: string[] = []
 					const updateValues: (string | number | null)[] = []
 
 					Object.entries(categoriaData).forEach(([key, value]) => {
 						updateFields.push(`${key} = ?`)
-						updateValues.push(value)
+						updateValues.push(value ?? null)
 					})
-					updateValues.push(id)
 
-					await connection.execute(
-						`UPDATE categorie SET ${updateFields.join(
-							", "
-						)} WHERE id_categoria = ?`,
-						updateValues
-					)
+					if (disciplina?.id_disciplina) {
+						updateFields.push("id_disciplina = ?")
+						updateValues.push(disciplina.id_disciplina)
+					}
+
+					if (updateFields.length > 0) {
+						updateValues.push(id)
+						await connection.execute(
+							`UPDATE categorie SET ${updateFields.join(
+								", "
+							)} WHERE id_categoria = ?`,
+							updateValues
+						)
+					}
 				}
 
 				// Update fasce relationships if provided
@@ -314,6 +348,6 @@ export default defineEventHandler(async (event) => {
 			message: mysqlError.message || "Errore interno del server",
 		})
 	} finally {
-		await connection.release()
+		connection.release()
 	}
 })

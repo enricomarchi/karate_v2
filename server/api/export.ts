@@ -19,7 +19,7 @@ import {
 	exportIncontriProve,
 	exportVotiIncontro,
 	exportClassifiche,
-} from "../utils/db"
+} from "../utils/export"
 
 export default defineEventHandler(async (event) => {
 	try {

@@ -280,10 +280,17 @@ CREATE TABLE voti_incontro (
 -- =================================================== SEZIONE VIEW =======================================================
 
 -- Vista dettaglio_categorie che include tutti i campi delle tabelle correlate
-CREATE VIEW dettaglio_categorie AS
+CREATE OR REPLACE VIEW dettaglio_categorie AS
 SELECT 
-    c.*,
-    d.valore as disciplina_nome
+    c.id_categoria,
+    c.nome,
+    c.id_disciplina,
+    c.sesso,
+    c.peso_min,
+    c.peso_max,
+    c.n_ordine,
+    d.id_disciplina as disciplina_id,
+    d.valore as disciplina_valore
 FROM categorie c
 LEFT JOIN discipline d ON c.id_disciplina = d.id_disciplina;
 
@@ -307,4 +314,73 @@ SELECT
     c.kyu
 FROM categorie_cinture cc
 JOIN cinture c ON cc.id_cintura = c.id_cintura;
+
+-- Vista per calcolare i range di età per ogni categoria
+CREATE VIEW range_fasce_categoria AS
+SELECT 
+    cf.id_categoria,
+    MIN(f.anno_nascita_min) as min_anno,
+    MAX(f.anno_nascita_max) as max_anno
+FROM categorie_fasce cf
+JOIN fasce_eta f ON cf.id_fascia = f.id_fascia
+GROUP BY cf.id_categoria;
+
+-- Vista per calcolare i range di cinture per ogni categoria
+CREATE VIEW range_cinture_categoria AS
+SELECT 
+    cc.id_categoria,
+    MIN(c.kyu) as min_kyu,
+    MAX(c.kyu) as max_kyu
+FROM categorie_cinture cc
+JOIN cinture c ON cc.id_cintura = c.id_cintura
+GROUP BY cc.id_categoria;
+
+-- Vista per trovare le categorie che si sovrappongono
+CREATE OR REPLACE VIEW categorie_sovrapposte AS
+SELECT DISTINCT
+    c1.id_categoria as cat1_id,
+    c1.nome as cat1_nome,
+    c2.id_categoria as cat2_id,
+    c2.nome as cat2_nome,
+    c1.id_disciplina,
+    d.valore as disciplina
+FROM categorie c1
+JOIN categorie c2 ON c1.id_categoria < c2.id_categoria
+JOIN discipline d ON c1.id_disciplina = d.id_disciplina
+JOIN range_fasce_categoria f1 ON c1.id_categoria = f1.id_categoria
+JOIN range_fasce_categoria f2 ON c2.id_categoria = f2.id_categoria
+JOIN range_cinture_categoria cin1 ON c1.id_categoria = cin1.id_categoria
+JOIN range_cinture_categoria cin2 ON c2.id_categoria = cin2.id_categoria
+WHERE 
+    c1.id_disciplina = c2.id_disciplina
+    AND (c1.sesso = c2.sesso OR c1.sesso = 'X' OR c2.sesso = 'X')
+    AND (
+        -- Sovrapposizione di pesi (se presenti)
+        (
+            c1.peso_min IS NOT NULL 
+            AND c2.peso_min IS NOT NULL 
+            AND (
+                (c1.peso_min BETWEEN c2.peso_min AND c2.peso_max)
+                OR (c1.peso_max BETWEEN c2.peso_min AND c2.peso_max)
+                OR (c2.peso_min BETWEEN c1.peso_min AND c1.peso_max)
+                OR (c2.peso_max BETWEEN c1.peso_min AND c1.peso_max)
+            )
+        )
+        OR (c1.peso_min IS NULL AND c2.peso_min IS NULL)
+    )
+    AND (
+        -- Sovrapposizione di anni
+        (f1.min_anno BETWEEN f2.min_anno AND f2.max_anno)
+        OR (f1.max_anno BETWEEN f2.min_anno AND f2.max_anno)
+        OR (f2.min_anno BETWEEN f1.min_anno AND f1.max_anno)
+        OR (f2.max_anno BETWEEN f1.min_anno AND f1.max_anno)
+    )
+    AND (
+        -- Sovrapposizione di cinture
+        -- Due range si sovrappongono se l'inizio di uno è contenuto nel range dell'altro
+        (cin1.min_kyu BETWEEN cin2.min_kyu AND cin2.max_kyu)
+        OR (cin1.max_kyu BETWEEN cin2.min_kyu AND cin2.max_kyu)
+        OR (cin2.min_kyu BETWEEN cin1.min_kyu AND cin1.max_kyu)
+        OR (cin2.max_kyu BETWEEN cin1.min_kyu AND cin1.max_kyu)
+    );
 

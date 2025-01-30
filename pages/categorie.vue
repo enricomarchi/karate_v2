@@ -111,15 +111,24 @@
 							v-for="categoria in categorie"
 							:key="categoria.id_categoria"
 							:class="{
-								'bg-blue-200': selectedCategorie.includes(
-									categoria.id_categoria
-								),
-								'bg-gray-100':
+								'transition-all duration-200': true, // Transizione più fluida
+								'bg-blue-200 hover:bg-blue-300':
+									selectedCategorie.includes(
+										categoria.id_categoria
+									),
+								'bg-gray-100 hover:bg-gray-200':
 									dragTarget === categoria.id_categoria,
-								'bg-red-100': hasOverlap(
+								'bg-red-100 hover:bg-red-200': hasOverlap(
 									categoria.id_categoria
 								),
+								'bg-white hover:bg-gray-200':
+									!selectedCategorie.includes(
+										categoria.id_categoria
+									) &&
+									dragTarget !== categoria.id_categoria &&
+									!hasOverlap(categoria.id_categoria),
 							}"
+							:title="getOverlapTooltip(categoria.id_categoria)"
 							class="mb-4"
 							@click="
 								toggleCategoriaSelection(categoria.id_categoria)
@@ -150,7 +159,11 @@
 								{{ categoria.id_disciplina }}
 							</td>
 							<td class="border px-4 py-2">
-								{{ categoria.sesso }}
+								{{
+									sessoOptions.find(
+										(opt) => opt.value === categoria.sesso
+									)?.label || ""
+								}}
 							</td>
 							<td class="border px-4 py-2">
 								{{ categoria.peso_min }}
@@ -233,12 +246,21 @@
 			@close="closeAutomaticForm"
 			@create="createCategorieAutomatiche"
 		/>
+		<CategorieAutomaticheFormModal
+			v-if="showModal"
+			:discipline="discipline"
+			:sesso-options="sessoOptions"
+			:fasce-eta="fasceEta"
+			:cinture="cinture"
+			@close="showModal = false"
+			@create="handleCreateCategorie"
+		/>
 		<LoadingOverlay :show="loading" :message="loadingMessage" />
 	</div>
 </template>
 
 <script setup lang="ts">
-import { ref, type Ref } from "vue"
+import { ref, type Ref, computed, watch, onMounted } from "vue"
 import { useFetch } from "nuxt/app" // Importa useFetch correttamente da 'nuxt/app'
 import CategoriaFormModal from "@/components/CategoriaFormModal.vue"
 import CategorieAutomaticheFormModal from "@/components/CategorieAutomaticheFormModal.vue"
@@ -248,45 +270,62 @@ import type {
 	Disciplina,
 	Fascia,
 	Cintura,
-	SessoOption,
+	CategorieSovrapposte,
 } from "~/types/global"
+import { getSessoOptions } from "~/types/global"
 
-// Definizione delle opzioni sesso come costante con tipo corretto
-const sessoOptions: SessoOption[] = [
-	{ value: "M", label: "Maschile" },
-	{ value: "F", label: "Femminile" },
-	{ value: "X", label: "Misto" },
-]
+// Rimuovi la definizione statica di sessoOptions e usa getSessoOptions
+const sessoOptions = getSessoOptions()
 
 const categoria: Ref<Categoria> = ref({
 	nome: "",
 	id_disciplina: "",
-	sesso: "X",
-	peso_min: null,
-	peso_max: null,
+	sesso: undefined, // Modifica qui: rimuovi il default "X"
+	peso_min: null, // Ensure null is used instead of undefined
+	peso_max: null, // Ensure null is used instead of undefined
 	n_ordine: null,
 	fasce: [],
 	cinture: [],
 })
 
-// Aggiorna le chiamate useFetch con i tipi corretti
 const { data: categorie } = await useFetch<Categoria[]>("/api/categorie")
 const { data: discipline } = await useFetch<Disciplina[]>("/api/discipline")
-const { data: fasceEta } = await useFetch<Fascia[]>("/api/fasce-eta")
+const { data: fasceEta } = await useFetch<Fascia[]>("/api/fasce")
 const { data: cinture } = await useFetch<Cintura[]>("/api/cinture")
-const { data: categorieOverlap } = await useFetch<number[]>(
-	"/api/categorie-sovrapposte"
+
+// Modifica la chiamata API per utilizzare il nuovo tipo
+const { data: categorieOverlapResponse } = await useFetch<{
+	details: CategorieSovrapposte[]
+	overlappingIds: number[]
+}>("/api/categorie-sovrapposte") // URL corretto
+
+// Sostituisci le computed properties con refs
+const categorieOverlap = ref<number[]>([])
+const overlapDetails = ref<CategorieSovrapposte[]>([])
+
+// Aggiorna i valori quando arrivano i dati
+watch(
+	() => categorieOverlapResponse.value,
+	(newValue) => {
+		if (newValue) {
+			categorieOverlap.value = newValue.overlappingIds
+			overlapDetails.value = newValue.details
+		}
+	},
+	{ immediate: true }
 )
 
 const formVisible = ref(false)
 const automaticFormVisible = ref(false)
 
 const selectedCategorie = ref<number[]>([])
-const dragTarget = ref<number | null>(null)
+const dragTarget = ref<number | undefined>(undefined)
 const loading = ref(false)
 const loadingMessage = ref("")
 const sortKey = ref("")
 const sortAsc = ref(true)
+const feedbackMessage = ref("")
+const feedbackType = ref<"success" | "error">("success")
 
 const sortTable = (key: keyof Categoria) => {
 	if (sortKey.value === key) {
@@ -308,9 +347,9 @@ const openForm = () => {
 		id_categoria: undefined,
 		nome: undefined,
 		id_disciplina: undefined,
-		sesso: undefined,
-		peso_min: undefined,
-		peso_max: undefined,
+		sesso: undefined, // Modifica qui: rimuovi il default "X"
+		peso_min: null, // Ensure null is used instead of undefined
+		peso_max: null, // Ensure null is used instead of undefined
 		n_ordine: undefined,
 		fasce: [],
 		cinture: [],
@@ -324,12 +363,47 @@ const closeForm = () => {
 		nome: undefined,
 		id_disciplina: undefined,
 		sesso: undefined,
-		peso_min: undefined,
-		peso_max: undefined,
+		peso_min: null, // Ensure null is used instead of undefined
+		peso_max: null, // Ensure null is used instead of undefined
 		n_ordine: undefined,
 		fasce: [],
 		cinture: [],
 	}
+}
+
+const assignOrderNumbers = () => {
+	// Ordina le categorie per numero d'ordine esistente
+	const categorieOrdinate = [...categorie.value]
+		.filter((c) => c.n_ordine !== null)
+		.sort((a, b) => (a.n_ordine || 0) - (b.n_ordine || 0))
+
+	// Trova il numero d'ordine più alto o usa 0 se non ci sono categorie
+	let maxOrder =
+		categorieOrdinate.length > 0
+			? Math.max(...categorieOrdinate.map((c) => c.n_ordine || 0))
+			: 0
+
+	// Assegna numeri d'ordine incrementali alle categorie che non ne hanno
+	const promises = categorie.value
+		.filter((c) => c.n_ordine === null)
+		.map(async (categoria) => {
+			maxOrder++ // Incrementa per ogni nuova categoria
+			try {
+				await useFetch(`/api/categorie`, {
+					method: "PUT",
+					query: { id: categoria.id_categoria },
+					body: { n_ordine: maxOrder },
+				})
+				categoria.n_ordine = maxOrder
+			} catch (error) {
+				console.error(
+					"Errore nell'assegnazione del numero d'ordine:",
+					error
+				)
+			}
+		})
+
+	return Promise.all(promises)
 }
 
 const saveCategoria = async (savedCategoria: Categoria) => {
@@ -337,20 +411,36 @@ const saveCategoria = async (savedCategoria: Categoria) => {
 		console.error("Errore: il campo 'nome' non può essere nullo")
 		return
 	}
+
+	// Se è una nuova categoria (senza id) e non ha n_ordine, trovalo automaticamente
+	if (!savedCategoria.id_categoria && !savedCategoria.n_ordine) {
+		const currentOrders = categorie.value
+			.map((c) => c.n_ordine || 0)
+			.filter((n) => n > 0)
+		savedCategoria.n_ordine =
+			currentOrders.length > 0 ? Math.min(...currentOrders) - 1 : 1
+	}
+
 	// Aggiorna i dati dopo il salvataggio
 	const [
 		{ data: categorieAggiornate },
 		{ data: categorieOverlapAggiornate },
 	] = await Promise.all([
 		useFetch<Categoria[]>("/api/categorie"),
-		useFetch<number[]>("/api/categorie-sovrapposte"),
+		useFetch<{ details: CategorieSovrapposte[]; overlappingIds: number[] }>(
+			"/api/categorie-sovrapposte" // URL corretto
+		),
 	])
 
 	// Aggiorna tutti i riferimenti
 	categorie.value = categorieAggiornate.value
-	categorieOverlap.value = categorieOverlapAggiornate.value
+	if (categorieOverlapAggiornate.value) {
+		categorieOverlap.value = categorieOverlapAggiornate.value.overlappingIds
+		overlapDetails.value = categorieOverlapAggiornate.value.details
+	}
 
 	closeForm()
+	await assignOrderNumbers() // Assegna numeri d'ordine mancanti dopo il salvataggio
 }
 
 const toggleCategoriaSelection = (id_categoria?: number) => {
@@ -415,7 +505,11 @@ const deleteCategoria = async (id_categoria?: number) => {
 		])
 
 		categorie.value = categorieAggiornate.value
-		categorieOverlap.value = categorieOverlapAggiornate.value
+		if (categorieOverlapAggiornate.value) {
+			categorieOverlap.value =
+				categorieOverlapAggiornate.value.overlappingIds
+			overlapDetails.value = categorieOverlapAggiornate.value.details
+		}
 	} catch (error) {
 		console.error("Errore nella cancellazione della categoria:", error)
 	}
@@ -468,11 +562,16 @@ const copyCategoria = async (categoria: Categoria) => {
 		{ data: categorieOverlapAggiornate },
 	] = await Promise.all([
 		useFetch<Categoria[]>("/api/categorie"),
-		useFetch<number[]>("/api/categorie-sovrapposte"),
+		useFetch<{ details: CategorieSovrapposte[]; overlappingIds: number[] }>(
+			"/api/categorie-sovrapposte" // URL corretto
+		),
 	])
 
 	categorie.value = categorieAggiornate.value
-	categorieOverlap.value = categorieOverlapAggiornate.value
+	if (categorieOverlapAggiornate.value) {
+		categorieOverlap.value = categorieOverlapAggiornate.value.overlappingIds
+		overlapDetails.value = categorieOverlapAggiornate.value.details
+	}
 }
 
 const copySelectedCategorie = async () => {
@@ -527,20 +626,44 @@ const closeAutomaticForm = () => {
 }
 
 const createCategorieAutomatiche = async (categorieData: Categoria[]) => {
-	// Aggiorna i dati dopo la creazione
-	const [
-		{ data: categorieAggiornate },
-		{ data: categorieOverlapAggiornate },
-	] = await Promise.all([
-		useFetch<Categoria[]>("/api/categorie"),
-		useFetch<number[]>("/api/categorie-sovrapposte"),
-	])
+	try {
+		loading.value = true
+		loadingMessage.value = "Creazione categorie in corso..."
 
-	// Aggiorna tutti i riferimenti
-	categorie.value = categorieAggiornate.value
-	categorieOverlap.value = categorieOverlapAggiornate.value
+		// Crea le categorie una alla volta
+		for (const categoria of categorieData) {
+			await useFetch("/api/categorie", {
+				method: "POST",
+				body: categoria,
+			})
+		}
 
-	closeAutomaticForm()
+		// Aggiorna i dati dopo la creazione
+		const [
+			{ data: categorieAggiornate },
+			{ data: categorieOverlapAggiornate },
+		] = await Promise.all([
+			useFetch<Categoria[]>("/api/categorie"),
+			useFetch<{
+				details: CategorieSovrapposte[]
+				overlappingIds: number[]
+			}>("/api/categorie-sovrapposte"),
+		])
+
+		// Aggiorna tutti i riferimenti
+		categorie.value = categorieAggiornate.value
+		if (categorieOverlapAggiornate.value) {
+			categorieOverlap.value =
+				categorieOverlapAggiornate.value.overlappingIds
+			overlapDetails.value = categorieOverlapAggiornate.value.details
+		}
+
+		closeAutomaticForm()
+		loading.value = false
+	} catch (error) {
+		console.error("Errore durante la creazione delle categorie:", error)
+		loading.value = false
+	}
 }
 
 let draggedCategoria: Categoria | null = null
@@ -555,12 +678,12 @@ const onDragOver = (categoria: Categoria) => {
 
 const onDragLeave = (categoria: Categoria) => {
 	if (dragTarget.value === categoria.id_categoria) {
-		dragTarget.value = null
+		dragTarget.value = undefined
 	}
 }
 
 const onDrop = async (targetCategoria: Categoria) => {
-	dragTarget.value = null
+	dragTarget.value = undefined
 	if (
 		draggedCategoria &&
 		draggedCategoria.id_categoria !== targetCategoria.id_categoria
@@ -603,10 +726,96 @@ const onDrop = async (targetCategoria: Categoria) => {
 	draggedCategoria = null
 }
 
+// Function to get tooltip text for overlapping categories
+const getOverlapTooltip = (id_categoria: number | undefined) => {
+	if (!id_categoria || !hasOverlap(id_categoria)) return ""
+
+	const overlaps = overlapDetails.value.filter(
+		(o) =>
+			o.cat1_id &&
+			o.cat2_id &&
+			(o.cat1_id === id_categoria || o.cat2_id === id_categoria)
+	)
+
+	if (overlaps.length === 0) return ""
+
+	return (
+		"Si sovrappone con: \n" +
+		overlaps
+			.map((o) => {
+				// Non facciamo il controllo qui perché il filter sopra ci garantisce che i valori esistono
+				const otherCatId =
+					o.cat1_id! === id_categoria ? o.cat2_id! : o.cat1_id!
+				const otherCatName =
+					o.cat1_id! === id_categoria ? o.cat2_nome : o.cat1_nome
+				const disciplina = o.disciplina
+				return `${otherCatName} (${disciplina})`
+			})
+			.join("\n")
+	)
+}
+
+// Aggiorna la funzione hasOverlap per utilizzare il computed
 const hasOverlap = (id_categoria?: number) => {
 	if (id_categoria === undefined) return false
 	return categorieOverlap.value?.includes(id_categoria) ?? false
 }
+
+const refreshCategorie = async () => {
+	const { data: categorieAggiornate } = await useFetch<Categoria[]>(
+		"/api/categorie"
+	)
+	categorie.value = categorieAggiornate.value
+
+	// Aggiorna anche i dati delle sovrapposizioni
+	const { data: categorieOverlapAggiornate } = await useFetch<{
+		details: CategorieSovrapposte[]
+		overlappingIds: number[]
+	}>("/api/categorie-sovrapposte")
+
+	if (categorieOverlapAggiornate.value) {
+		categorieOverlap.value = categorieOverlapAggiornate.value.overlappingIds
+		overlapDetails.value = categorieOverlapAggiornate.value.details
+	}
+}
+
+onMounted(async () => {
+	await assignOrderNumbers()
+})
+
+const showModal = ref(false)
+
+const handleCreateCategorie = async (categorie: Categoria[]) => {
+	try {
+		for (const categoria of categorie) {
+			await useFetch("/api/categorie", {
+				method: "POST",
+				body: categoria,
+			})
+		}
+		// Ricarica la lista delle categorie dopo il salvataggio
+		await refreshCategorie()
+		showModal.value = false
+	} catch (error) {
+		console.error("Errore durante la creazione delle categorie:", error)
+		// Gestisci l'errore (mostra un messaggio all'utente, ecc.)
+	}
+}
+
+// Carica i dati necessari
+onMounted(async () => {
+	// Carica discipline
+	const { data: disciplineData } = await useFetch("/api/discipline")
+	discipline.value = disciplineData.value || []
+
+	// Carica fasce età
+	const { data: fasceData } = await useFetch("/api/fasce")
+	fasceEta.value = fasceData.value || []
+
+	// Carica cinture
+	const { data: cintureData } = await useFetch("/api/cinture")
+	cinture.value = cintureData.value || []
+})
 </script>
 
 <style scoped>
@@ -634,5 +843,10 @@ tr {
 		transform: translateX(0);
 		opacity: 1;
 	}
+}
+
+[title] {
+	position: relative;
+	cursor: help;
 }
 </style>

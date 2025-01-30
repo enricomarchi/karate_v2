@@ -80,10 +80,10 @@
 						>
 							<option
 								v-for="s in sessoDisponibili"
-								:key="s.id_sesso"
-								:value="s.id_sesso"
+								:key="s.value"
+								:value="s.value"
 							>
-								{{ s.valore }}
+								{{ s.label }}
 							</option>
 						</select>
 					</div>
@@ -110,10 +110,10 @@
 						>
 							<option
 								v-for="s in sessoSelezionati"
-								:key="s.id_sesso"
-								:value="s.id_sesso"
+								:key="s.value"
+								:value="s.value"
 							>
-								{{ s.valore }}
+								{{ s.label }}
 							</option>
 						</select>
 					</div>
@@ -341,38 +341,60 @@
 	</div>
 </template>
 
-<script setup>
-import { ref, onMounted, computed } from "vue"
+<script setup lang="ts">
+import { ref, computed, onMounted } from "vue"
+import type { PropType } from "vue"
+import type {
+	Categoria,
+	Disciplina,
+	Fascia,
+	Cintura,
+	SessoOption,
+} from "~/types/global"
 
 const props = defineProps({
-	discipline: Array,
-	sessoOptions: Array,
-	fasceEta: Array,
-	cinture: Array,
+	discipline: {
+		type: Array as PropType<Disciplina[]>,
+		required: true,
+	},
+	sessoOptions: {
+		type: Array as PropType<SessoOption[]>,
+		required: true,
+	},
+	fasceEta: {
+		type: Array as PropType<Fascia[]>,
+		required: true,
+	},
+	cinture: {
+		type: Array as PropType<Cintura[]>,
+		required: true,
+	},
 })
 
 const emit = defineEmits(["close", "create"])
 
-const disciplineDisponibili = ref([])
-const disciplineSelezionate = ref([])
-const tempDisciplineDisponibili = ref([])
-const tempDisciplineSelezionate = ref([])
+// Tipizza i ref degli array
+const disciplineDisponibili = ref<Disciplina[]>([])
+const disciplineSelezionate = ref<Disciplina[]>([])
+const tempDisciplineDisponibili = ref<string[]>([])
+const tempDisciplineSelezionate = ref<string[]>([])
 
-const sessoDisponibili = ref([])
-const sessoSelezionati = ref([])
-const tempSessiDisponibili = ref([])
-const tempSessiSelezionati = ref([])
+const sessoDisponibili = ref<SessoOption[]>([])
+const sessoSelezionati = ref<SessoOption[]>([])
+const tempSessiDisponibili = ref<string[]>([])
+const tempSessiSelezionati = ref<string[]>([])
 
-const fasceDisponibili = ref([])
-const fasceSelezionate = ref([])
-const tempFasceDisponibili = ref([])
-const tempFasceSelezionate = ref([])
+const fasceDisponibili = ref<Fascia[]>([])
+const fasceSelezionate = ref<Fascia[]>([])
+const tempFasceDisponibili = ref<number[]>([])
+const tempFasceSelezionate = ref<number[]>([])
 
-const cintureDisponibili = ref([])
-const cintureSelezionate = ref([])
-const tempCintureDisponibili = ref([])
-const tempCintureSelezionate = ref([])
+const cintureDisponibili = ref<Cintura[]>([])
+const cintureSelezionate = ref<Cintura[]>([])
+const tempCintureDisponibili = ref<number[]>([])
+const tempCintureSelezionate = ref<number[]>([])
 
+// Configurazione flags
 const distintaPerDisciplina = ref(true)
 const distintaPerSesso = ref(true)
 const distintaPerFascia = ref(true)
@@ -386,15 +408,42 @@ const nomeFields = ref({
 	cinture: true,
 })
 
-const sortById = (a, b, idField) => a[idField] - b[idField]
-const sortByString = (a, b, idField) => a[idField].localeCompare(b[idField])
+// Type guards migliorati
+const isFasciaWithId = (
+	fascia: Fascia
+): fascia is Required<Pick<Fascia, "id_fascia">> & Fascia => {
+	return typeof fascia.id_fascia === "number"
+}
+
+const isCinturaWithId = (
+	cintura: Cintura
+): cintura is Required<Pick<Cintura, "id_cintura">> & Cintura => {
+	return typeof cintura.id_cintura === "number"
+}
+
+// Helper functions per il sorting
+const sortByString = (
+	a: { [key: string]: any },
+	b: { [key: string]: any },
+	field: string
+): number => {
+	return (a[field] || "").localeCompare(b[field] || "")
+}
+
+const sortById = (
+	a: { [key: string]: any },
+	b: { [key: string]: any },
+	field: string
+): number => {
+	return (a[field] || 0) - (b[field] || 0)
+}
 
 onMounted(() => {
 	disciplineDisponibili.value = [...props.discipline].sort((a, b) =>
 		sortByString(a, b, "id_disciplina")
 	)
 	sessoDisponibili.value = [...props.sessoOptions].sort((a, b) =>
-		sortByString(a, b, "id_sesso")
+		sortByString(a, b, "value")
 	)
 	fasceDisponibili.value = [...props.fasceEta].sort((a, b) =>
 		sortById(a, b, "id_fascia")
@@ -404,141 +453,30 @@ onMounted(() => {
 	)
 })
 
-const aggiungiDiscipline = () => {
-	const selezionate = disciplineDisponibili.value.filter((disciplina) =>
-		tempDisciplineDisponibili.value.includes(disciplina.id_disciplina)
-	)
-	disciplineSelezionate.value.push(...selezionate)
-	disciplineSelezionate.value.sort((a, b) =>
-		sortByString(a, b, "id_disciplina")
-	)
+// Funzione generazione nome migliorata
+const generateNome = (categoria: Partial<Categoria>): string => {
+	const parts: string[] = []
 
-	disciplineDisponibili.value = disciplineDisponibili.value.filter(
-		(disciplina) =>
-			!tempDisciplineDisponibili.value.includes(disciplina.id_disciplina)
-	)
-	tempDisciplineDisponibili.value = []
-}
-
-const rimuoviDiscipline = () => {
-	const selezionate = disciplineSelezionate.value.filter((disciplina) =>
-		tempDisciplineSelezionate.value.includes(disciplina.id_disciplina)
-	)
-	disciplineDisponibili.value.push(...selezionate)
-	disciplineDisponibili.value.sort((a, b) =>
-		sortByString(a, b, "id_disciplina")
-	)
-
-	disciplineSelezionate.value = disciplineSelezionate.value.filter(
-		(disciplina) =>
-			!tempDisciplineSelezionate.value.includes(disciplina.id_disciplina)
-	)
-	tempDisciplineSelezionate.value = []
-}
-
-const aggiungiSessi = () => {
-	const selezionati = sessoDisponibili.value.filter((s) =>
-		tempSessiDisponibili.value.includes(s.id_sesso)
-	)
-	sessoSelezionati.value.push(...selezionati)
-	sessoSelezionati.value.sort((a, b) => sortByString(a, b, "id_sesso"))
-
-	sessoDisponibili.value = sessoDisponibili.value.filter(
-		(s) => !tempSessiDisponibili.value.includes(s.id_sesso)
-	)
-	tempSessiDisponibili.value = []
-}
-
-const rimuoviSessi = () => {
-	const selezionati = sessoSelezionati.value.filter((s) =>
-		tempSessiSelezionati.value.includes(s.id_sesso)
-	)
-	sessoDisponibili.value.push(...selezionati)
-	sessoDisponibili.value.sort((a, b) => sortByString(a, b, "id_sesso"))
-
-	sessoSelezionati.value = sessoSelezionati.value.filter(
-		(s) => !tempSessiSelezionati.value.includes(s.id_sesso)
-	)
-	tempSessiSelezionati.value = []
-}
-
-const aggiungiFasce = () => {
-	const selezionate = fasceDisponibili.value.filter((fascia) =>
-		tempFasceDisponibili.value.includes(fascia.id_fascia)
-	)
-	fasceSelezionate.value.push(...selezionate)
-	fasceSelezionate.value.sort((a, b) => sortById(a, b, "id_fascia"))
-
-	fasceDisponibili.value = fasceDisponibili.value.filter(
-		(fascia) => !tempFasceDisponibili.value.includes(fascia.id_fascia)
-	)
-	tempFasceDisponibili.value = []
-}
-
-const rimuoviFasce = () => {
-	const selezionate = fasceSelezionate.value.filter((fascia) =>
-		tempFasceSelezionate.value.includes(fascia.id_fascia)
-	)
-	fasceDisponibili.value.push(...selezionate)
-	fasceDisponibili.value.sort((a, b) => sortById(a, b, "id_fascia"))
-
-	fasceSelezionate.value = fasceSelezionate.value.filter(
-		(fascia) => !tempFasceSelezionate.value.includes(fascia.id_fascia)
-	)
-	tempFasceSelezionate.value = []
-}
-
-const aggiungiCinture = () => {
-	const selezionate = cintureDisponibili.value.filter((cintura) =>
-		tempCintureDisponibili.value.includes(cintura.id_cintura)
-	)
-	cintureSelezionate.value.push(...selezionate)
-	cintureSelezionate.value.sort((a, b) => sortById(a, b, "id_cintura"))
-
-	cintureDisponibili.value = cintureDisponibili.value.filter(
-		(cintura) => !tempCintureDisponibili.value.includes(cintura.id_cintura)
-	)
-	tempCintureDisponibili.value = []
-}
-
-const rimuoviCinture = () => {
-	const selezionate = cintureSelezionate.value.filter((cintura) =>
-		tempCintureSelezionate.value.includes(cintura.id_cintura)
-	)
-	cintureDisponibili.value.push(...selezionate)
-	cintureDisponibili.value.sort((a, b) => sortById(a, b, "id_cintura"))
-
-	cintureSelezionate.value = cintureSelezionate.value.filter(
-		(cintura) => !tempCintureSelezionate.value.includes(cintura.id_cintura)
-	)
-	tempCintureSelezionate.value = []
-}
-
-const generateNome = (categoria) => {
-	const parts = []
-
-	if (nomeFields.value.disciplina && categoria.id_disciplina) {
+	// Verifica esplicita per disciplina prima di accedere a id_disciplina
+	if (
+		nomeFields.value.disciplina &&
+		categoria.disciplina &&
+		categoria.disciplina.id_disciplina
+	) {
 		const disciplina = props.discipline.find(
-			(d) => d.id_disciplina === categoria.id_disciplina
+			(d) => d.id_disciplina === categoria.disciplina?.id_disciplina
 		)
-		if (disciplina) parts.push(disciplina.valore)
+		if (disciplina?.valore) parts.push(disciplina.valore)
 	}
 
 	if (nomeFields.value.sesso && categoria.sesso) {
 		const sessoOption = props.sessoOptions.find(
-			(s) => s.id_sesso === categoria.sesso
+			(s) => s.value === categoria.sesso
 		)
-		if (sessoOption) parts.push(sessoOption.valore)
+		if (sessoOption?.label) parts.push(sessoOption.label)
 	}
 
-	if (nomeFields.value.peso && (categoria.peso_min || categoria.peso_max)) {
-		const peso = `${categoria.peso_min || "0"}-${
-			categoria.peso_max || "∞"
-		}kg`
-		parts.push(peso)
-	}
-
-	if (nomeFields.value.fasce && categoria.fasce?.length > 0) {
+	if (nomeFields.value.fasce && categoria.fasce?.length) {
 		const fasceDes = categoria.fasce
 			.map(
 				(id) =>
@@ -548,162 +486,228 @@ const generateNome = (categoria) => {
 		if (fasceDes.length) parts.push(fasceDes.join("/"))
 	}
 
-	if (nomeFields.value.cinture && categoria.cinture?.length > 0) {
+	if (nomeFields.value.cinture && categoria.cinture?.length) {
 		const cintureCol = categoria.cinture
 			.map((id) => props.cinture.find((c) => c.id_cintura === id)?.colore)
 			.filter(Boolean)
-		if (cintureCol.length) parts.push(cintureCol.join("/"))
+		if (cintureCol.length) parts.push(cintureCol.join("-"))
 	}
 
 	return parts.join(" ")
 }
 
-const handleSave = async () => {
-	const createCombinations = (arrays) => {
-		if (arrays.length === 0) return [[]]
-		const [first, ...rest] = arrays
-		const restCombinations = createCombinations(rest)
-		return first.flatMap((item) =>
-			restCombinations.map((combination) => [item, ...combination])
-		)
-	}
-
-	let categoriesToCreate = []
-
-	// Prepara gli array per le combinazioni
-	const arrays = []
-
-	// Aggiungi discipline
-	if (disciplineSelezionate.value.length > 0) {
-		arrays.push(
-			distintaPerDisciplina.value
-				? disciplineSelezionate.value
-				: [disciplineSelezionate.value]
-		)
-	}
-
-	// Aggiungi sessi
-	if (sessoSelezionati.value.length > 0) {
-		arrays.push(
-			distintaPerSesso.value
-				? sessoSelezionati.value
-				: [sessoSelezionati.value]
-		)
-	}
-
-	// Aggiungi fasce
-	if (fasceSelezionate.value.length > 0) {
-		arrays.push(
-			distintaPerFascia.value
-				? fasceSelezionate.value
-				: [fasceSelezionate.value]
-		)
-	}
-
-	// Aggiungi cinture
-	if (cintureSelezionate.value.length > 0) {
-		arrays.push(
-			distintaPerCintura.value
-				? cintureSelezionate.value
-				: [cintureSelezionate.value]
-		)
-	}
-
-	const combinations = createCombinations(arrays)
-
-	for (const combination of combinations) {
-		const [disciplina, sesso, fascia, cintura] = combination
-
-		// Crea l'oggetto mockCategoria con gli stessi dati usati nel preview
-		const mockCategoria = {
-			id_disciplina: disciplina?.id_disciplina || null,
-			sesso: sesso?.id_sesso || null,
-			fasce: distintaPerFascia.value
-				? [fascia?.id_fascia].filter(Boolean)
-				: fasceSelezionate.value.map((f) => f.id_fascia),
-			cinture: distintaPerCintura.value
-				? [cintura?.id_cintura].filter(Boolean)
-				: cintureSelezionate.value.map((c) => c.id_cintura),
-		}
-
-		const categoria = {
-			nome: generateNome(mockCategoria), // Usa la stessa funzione del preview
-			id_disciplina: mockCategoria.id_disciplina,
-			sesso: mockCategoria.sesso,
-			fasce: mockCategoria.fasce,
-			cinture: mockCategoria.cinture,
-			peso_min: null,
-			peso_max: null,
-			n_ordine: null,
-		}
-		categoriesToCreate.push(categoria)
-	}
-
-	// Ottieni il valore massimo di n_ordine esistente
-	let maxNOrdine = 0
-	try {
-		const response = await fetch("/api/categorie?fields=n_ordine")
-		const categorieEsistenti = await response.json()
-		maxNOrdine = Math.max(
-			0,
-			...categorieEsistenti.map((c) => c.n_ordine || 0)
-		)
-	} catch (error) {
-		console.error("Errore nel recupero di n_ordine:", error)
-	}
-
-	// Assegna n_ordine incrementale e crea le categorie in modo sincrono
-	for (const categoria of categoriesToCreate) {
-		maxNOrdine += 1
-		categoria.n_ordine = maxNOrdine
-
-		// Crea la categoria nel database
-		try {
-			const response = await fetch("/api/categorie", {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-				},
-				body: JSON.stringify(categoria),
-			})
-
-			if (!response.ok) {
-				throw new Error(
-					`Errore nella creazione della categoria: ${response.statusText}`
-				)
-			}
-
-			const nuovaCategoria = await response.json()
-			// Puoi gestire la nuova categoria se necessario
-		} catch (error) {
-			console.error("Errore nella creazione della categoria:", error)
-			// Gestisci l'errore secondo le tue necessità
-		}
-	}
-
-	// Dopo aver creato tutte le categorie, emetti l'evento e chiudi il form
-	emit("create", categoriesToCreate)
-	close()
+// Funzione per creare combinazioni di valori
+const createCombinations = <T>(arrays: T[][]): T[][] => {
+	if (arrays.length === 0) return [[]]
+	const [first, ...rest] = arrays
+	const restCombinations = createCombinations(rest)
+	return first.flatMap((item) =>
+		restCombinations.map((combination) => [item, ...combination])
+	)
 }
 
+// Funzioni per gestire le discipline
+const aggiungiDiscipline = () => {
+	if (!tempDisciplineDisponibili.value.length) return
+	const selected = disciplineDisponibili.value.filter((d) =>
+		tempDisciplineDisponibili.value.includes(d.id_disciplina || "")
+	)
+	disciplineSelezionate.value = [
+		...disciplineSelezionate.value,
+		...selected,
+	].sort((a, b) => sortByString(a, b, "id_disciplina"))
+	disciplineDisponibili.value = disciplineDisponibili.value.filter(
+		(d) => !tempDisciplineDisponibili.value.includes(d.id_disciplina || "")
+	)
+	tempDisciplineDisponibili.value = []
+}
+
+const rimuoviDiscipline = () => {
+	if (!tempDisciplineSelezionate.value.length) return
+	const selected = disciplineSelezionate.value.filter((d) =>
+		tempDisciplineSelezionate.value.includes(d.id_disciplina || "")
+	)
+	disciplineDisponibili.value = [
+		...disciplineDisponibili.value,
+		...selected,
+	].sort((a, b) => sortByString(a, b, "id_disciplina"))
+	disciplineSelezionate.value = disciplineSelezionate.value.filter(
+		(d) => !tempDisciplineSelezionate.value.includes(d.id_disciplina || "")
+	)
+	tempDisciplineSelezionate.value = []
+}
+
+// Funzioni per gestire i sessi
+const aggiungiSessi = () => {
+	if (!tempSessiDisponibili.value.length) return
+	const selected = sessoDisponibili.value.filter((s) =>
+		tempSessiDisponibili.value.includes(s.value)
+	)
+	sessoSelezionati.value = [...sessoSelezionati.value, ...selected].sort(
+		(a, b) => sortByString(a, b, "value")
+	)
+	sessoDisponibili.value = sessoDisponibili.value.filter(
+		(s) => !tempSessiDisponibili.value.includes(s.value)
+	)
+	tempSessiDisponibili.value = []
+}
+
+const rimuoviSessi = () => {
+	if (!tempSessiSelezionati.value.length) return
+	const selected = sessoSelezionati.value.filter((s) =>
+		tempSessiSelezionati.value.includes(s.value)
+	)
+	sessoDisponibili.value = [...sessoDisponibili.value, ...selected].sort(
+		(a, b) => sortByString(a, b, "value")
+	)
+	sessoSelezionati.value = sessoSelezionati.value.filter(
+		(s) => !tempSessiSelezionati.value.includes(s.value)
+	)
+	tempSessiSelezionati.value = []
+}
+
+// Funzioni per gestire le fasce
+const aggiungiFasce = () => {
+	if (!tempFasceDisponibili.value.length) return
+	const selected = fasceDisponibili.value.filter((f) =>
+		tempFasceDisponibili.value.includes(f.id_fascia || 0)
+	)
+	fasceSelezionate.value = [...fasceSelezionate.value, ...selected].sort(
+		(a, b) => sortById(a, b, "id_fascia")
+	)
+	fasceDisponibili.value = fasceDisponibili.value.filter(
+		(f) => !tempFasceDisponibili.value.includes(f.id_fascia || 0)
+	)
+	tempFasceDisponibili.value = []
+}
+
+const rimuoviFasce = () => {
+	if (!tempFasceSelezionate.value.length) return
+	const selected = fasceSelezionate.value.filter((f) =>
+		tempFasceSelezionate.value.includes(f.id_fascia || 0)
+	)
+	fasceDisponibili.value = [...fasceDisponibili.value, ...selected].sort(
+		(a, b) => sortById(a, b, "id_fascia")
+	)
+	fasceSelezionate.value = fasceSelezionate.value.filter(
+		(f) => !tempFasceSelezionate.value.includes(f.id_fascia || 0)
+	)
+	tempFasceSelezionate.value = []
+}
+
+// Funzioni per gestire le cinture
+const aggiungiCinture = () => {
+	if (!tempCintureDisponibili.value.length) return
+	const selected = cintureDisponibili.value.filter((c) =>
+		tempCintureDisponibili.value.includes(c.id_cintura || 0)
+	)
+	cintureSelezionate.value = [...cintureSelezionate.value, ...selected].sort(
+		(a, b) => sortById(a, b, "id_cintura")
+	)
+	cintureDisponibili.value = cintureDisponibili.value.filter(
+		(c) => !tempCintureDisponibili.value.includes(c.id_cintura || 0)
+	)
+	tempCintureDisponibili.value = []
+}
+
+const rimuoviCinture = () => {
+	if (!tempCintureSelezionate.value.length) return
+	const selected = cintureSelezionate.value.filter((c) =>
+		tempCintureSelezionate.value.includes(c.id_cintura || 0)
+	)
+	cintureDisponibili.value = [...cintureDisponibili.value, ...selected].sort(
+		(a, b) => sortById(a, b, "id_cintura")
+	)
+	cintureSelezionate.value = cintureSelezionate.value.filter(
+		(c) => !tempCintureSelezionate.value.includes(c.id_cintura || 0)
+	)
+	tempCintureSelezionate.value = []
+}
+
+// Funzione close
 const close = () => {
 	emit("close")
 }
 
-// Sostituisci la computed property previewNome con questa nuova versione
-const previewCategorie = computed(() => {
-	// Usa la stessa logica di createCombinations da handleSave
-	const createCombinations = (arrays) => {
-		if (arrays.length === 0) return [[]]
-		const [first, ...rest] = arrays
-		const restCombinations = createCombinations(rest)
-		return first.flatMap((item) =>
-			restCombinations.map((combination) => [item, ...combination])
-		)
-	}
+// ...existing code for buttons and handlers...
 
-	// Prepara gli array per le combinazioni
-	const arrays = []
+const handleSave = async () => {
+	try {
+		const arrays: any[][] = []
+
+		if (disciplineSelezionate.value.length > 0) {
+			arrays.push(
+				distintaPerDisciplina.value
+					? disciplineSelezionate.value
+					: [disciplineSelezionate.value]
+			)
+		}
+
+		if (sessoSelezionati.value.length > 0) {
+			arrays.push(
+				distintaPerSesso.value
+					? sessoSelezionati.value
+					: [sessoSelezionati.value]
+			)
+		}
+
+		if (fasceSelezionate.value.length > 0) {
+			arrays.push(
+				distintaPerFascia.value
+					? fasceSelezionate.value
+					: [fasceSelezionate.value]
+			)
+		}
+
+		if (cintureSelezionate.value.length > 0) {
+			arrays.push(
+				distintaPerCintura.value
+					? cintureSelezionate.value
+					: [cintureSelezionate.value]
+			)
+		}
+
+		const combinations = createCombinations(arrays)
+		const categoriesToCreate: Categoria[] = combinations.map(
+			(combination) => {
+				const [disciplina, sesso, fascia, cintura] = combination
+				const newCategoria: Categoria = {
+					nome: "",
+					id_disciplina: disciplina?.id_disciplina,
+					sesso: sesso?.value,
+					peso_min: null,
+					peso_max: null,
+					n_ordine: null,
+					fasce: distintaPerFascia.value
+						? [fascia?.id_fascia].filter(Boolean)
+						: fasceSelezionate.value
+								.map((f) => f.id_fascia)
+								.filter(Boolean),
+					cinture: distintaPerCintura.value
+						? [cintura?.id_cintura].filter(Boolean)
+						: cintureSelezionate.value
+								.map((c) => c.id_cintura)
+								.filter(Boolean),
+				}
+
+				// Genera il nome per la categoria
+				newCategoria.nome = generateNome(newCategoria)
+
+				return newCategoria
+			}
+		)
+
+		console.log("Categorie da creare:", categoriesToCreate)
+		emit("create", categoriesToCreate)
+		emit("close")
+	} catch (error) {
+		console.error("Errore nella creazione delle categorie:", error)
+	}
+}
+
+// Computed property per l'anteprima
+const previewCategorie = computed(() => {
+	const arrays: any[][] = []
 
 	if (disciplineSelezionate.value.length > 0) {
 		arrays.push(
@@ -737,27 +741,28 @@ const previewCategorie = computed(() => {
 		)
 	}
 
-	if (arrays.length === 0) return []
-
 	const combinations = createCombinations(arrays)
-
-	return combinations
-		.map((combination) => {
-			const [disciplina, sesso, fascia, cintura] = combination
-			const mockCategoria = {
-				id_disciplina: disciplina?.id_disciplina,
-				sesso: sesso?.id_sesso,
-				fasce: distintaPerFascia.value
-					? [fascia?.id_fascia].filter(Boolean)
-					: fasceSelezionate.value.map((f) => f.id_fascia),
-				cinture: distintaPerCintura.value
-					? [cintura?.id_cintura].filter(Boolean)
-					: cintureSelezionate.value.map((c) => c.id_cintura),
-			}
-
-			return generateNome(mockCategoria)
-		})
-		.filter(Boolean)
+	return combinations.map((combination) => {
+		const [disciplina, sesso, fascia, cintura] = combination
+		const categoria: Partial<Categoria> = {
+			disciplina: disciplina
+				? {
+						id_disciplina: disciplina.id_disciplina || undefined,
+						valore: disciplina.valore || undefined,
+				  }
+				: undefined,
+			sesso: sesso?.value,
+			peso_min: null,
+			peso_max: null,
+			fasce: distintaPerFascia.value
+				? [fascia?.id_fascia]
+				: fasceSelezionate.value.map((f) => f.id_fascia),
+			cinture: distintaPerCintura.value
+				? [cintura?.id_cintura]
+				: cintureSelezionate.value.map((c) => c.id_cintura),
+		}
+		return generateNome(categoria)
+	})
 })
 </script>
 

@@ -21,7 +21,7 @@
 import { ref, onMounted } from "vue"
 import { useRouter, useRoute } from "vue-router"
 import type { Configurazione, ProvaAPI } from "~/types/configurazioni"
-import ConfigurationForm from "~/components/configurazioni/ConfigurationForm.vue"
+import ConfigurationForm from "~/components/ConfigurationForm.vue"
 
 const router = useRouter()
 const route = useRoute()

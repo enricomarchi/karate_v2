@@ -250,7 +250,7 @@
 
 <script setup>
 import { ref, onMounted } from "vue"
-import { useFetch } from "#app"
+import { useFetch } from "nuxt/app"
 import LoadingOverlay from "@/components/LoadingOverlay.vue"
 
 const message = ref("")
@@ -272,71 +272,38 @@ const tabelloniCompletatiCount = ref(0)
 const loading = ref(false)
 const loadingMessage = ref("")
 
-const fetchWithRetry = async (url, retries = 3) => {
-	for (let i = 0; i < retries; i++) {
-		try {
-			const response = await fetch(url)
-			if (!response.ok) {
-				throw new Error(`HTTP error! status: ${response.status}`)
-			}
-			const data = await response.json()
-			return data
-		} catch (error) {
-			if (i === retries - 1) throw error
-			await new Promise((resolve) => setTimeout(resolve, 1000 * (i + 1)))
-		}
-	}
-}
+const updateCounts = async () => {
+	const { data: fasceData } = await useFetch("/api/fasce")
+	const { data: categorieData } = await useFetch("/api/categorie")
+	const { data: atletiData } = await useFetch("/api/atleti")
+	const { data: societaData } = await useFetch("/api/societa")
+	const { data: iscrizioniData } = await useFetch("/api/iscrizioni")
+	const { data: unassignedData } = await useFetch(
+		"/api/iscrizioni/unassigned"
+	)
+	const { data: sovrapposteData } = await useFetch(
+		"/api/categorie/sovrapposte"
+	)
+	const { data: daConfermare } = await useFetch(
+		"/api/iscrizioni/da-confermare"
+	)
+	const { data: tabelloniData } = await useFetch("/api/tabelloni")
 
-const fetchCounts = async () => {
-	try {
-		const endpoints = [
-			"/api/fasce-eta",
-			"/api/categorie",
-			"/api/atleti",
-			"/api/societa",
-			"/api/iscrizioni",
-			"/api/iscrizioni/unassigned",
-			"/api/categorie-sovrapposte",
-			"/api/iscrizioni/da-confermare",
-			"/api/tabelloni",
-		]
-
-		const results = await Promise.all(
-			endpoints.map((endpoint) => fetchWithRetry(endpoint))
-		)
-
-		console.log("Risultati delle chiamate:", results)
-
-		// Aggiorna i contatori solo se i dati sono validi
-		if (Array.isArray(results[0])) fasceCount.value = results[0].length
-		if (Array.isArray(results[1])) categorieCount.value = results[1].length
-		if (Array.isArray(results[2])) atletiCount.value = results[2].length
-		if (Array.isArray(results[3])) societaCount.value = results[3].length
-		if (Array.isArray(results[4])) iscrizioniCount.value = results[4].length
-		if (Array.isArray(results[5]))
-			unassignedIscrizioniCount.value = results[5].length
-		if (Array.isArray(results[6]))
-			categorieSovrapposteCount.value = results[6].length
-		if (Array.isArray(results[7]))
-			unconfirmedIscrizioniCount.value = results[7].length
-		if (Array.isArray(results[8])) {
-			tabelloniCount.value = results[8].length
-			tabelloniBozzaCount.value = results[8].filter(
-				(t) => t.stato === "BOZZA"
-			).length
-			tabelloniAttiviCount.value = results[8].filter(
-				(t) => t.stato === "ATTIVO"
-			).length
-			tabelloniCompletatiCount.value = results[8].filter(
-				(t) => t.stato === "COMPLETATO"
-			).length
-		}
-	} catch (err) {
-		console.error("Errore nel caricamento dei conteggi:", err)
-		error.value = true
-		message.value = "Errore nel caricamento dei dati: " + err.message
-	}
+	fasceCount.value = fasceData.value?.length || 0
+	categorieCount.value = categorieData.value?.length || 0
+	atletiCount.value = atletiData.value?.length || 0
+	societaCount.value = societaData.value?.length || 0
+	iscrizioniCount.value = iscrizioniData.value?.length || 0
+	unassignedIscrizioniCount.value = unassignedData.value?.length || 0
+	categorieSovrapposteCount.value = sovrapposteData.value?.length || 0
+	unconfirmedIscrizioniCount.value = daConfermare.value?.length || 0
+	tabelloniCount.value = tabelloniData.value?.length || 0
+	tabelloniBozzaCount.value =
+		tabelloniData.value?.filter((t) => t.stato === "BOZZA").length || 0
+	tabelloniAttiviCount.value =
+		tabelloniData.value?.filter((t) => t.stato === "ATTIVO").length || 0
+	tabelloniCompletatiCount.value =
+		tabelloniData.value?.filter((t) => t.stato === "COMPLETATO").length || 0
 }
 
 const importData = async () => {
@@ -354,7 +321,7 @@ const importData = async () => {
 
 		message.value = "Importazione completata con successo"
 		error.value = false
-		await fetchCounts() // Aggiorna i conteggi dopo l'importazione
+		await updateCounts() // Aggiorna i conteggi dopo l'importazione
 	} catch (err) {
 		console.error("Errore durante l'importazione:", err)
 		message.value = "Errore durante l'importazione"
@@ -377,7 +344,6 @@ const exportData = async () => {
 		const response = await fetch("/api/export")
 		const blob = await response.blob()
 
-		// Crea un link per il download
 		const url = window.URL.createObjectURL(blob)
 		const a = document.createElement("a")
 		a.href = url
@@ -404,8 +370,7 @@ const exportData = async () => {
 	}
 }
 
-// Carica i conteggi quando il componente viene montato
 onMounted(() => {
-	fetchCounts()
+	updateCounts()
 })
 </script>
