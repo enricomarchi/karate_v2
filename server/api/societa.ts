@@ -1,5 +1,3 @@
-import mysql from "mysql2/promise"
-import dotenv from "dotenv"
 import {
 	defineEventHandler,
 	getQuery,
@@ -7,51 +5,43 @@ import {
 	assertMethod,
 	createError,
 } from "h3"
-
-dotenv.config()
-
-const dbConfig = {
-	host: process.env.DB_HOST,
-	user: process.env.DB_USER,
-	password: process.env.DB_PASSWORD,
-	database: process.env.DB_NAME,
-	connectTimeout: 10000,
-}
+import { getConnection } from "../utils/db"
+import type { SocietaRow, MySQLError } from "../../types/global"
+import type { ResultSetHeader } from "mysql2/promise"
 
 export default defineEventHandler(async (event) => {
 	const method = event.node.req.method
 	const query = getQuery(event)
 	let body = {}
+	let connection
 
 	if (method !== "GET") {
 		body = await readBody(event)
 	}
 
-	let connection
-
 	try {
 		assertMethod(event, ["GET", "POST", "PUT", "DELETE"])
-
-		connection = await mysql.createConnection(dbConfig)
+		connection = await getConnection()
 
 		if (method === "GET") {
 			const { id } = query
 			if (id) {
-				const [rows] = await connection.execute(
-					"SELECT * FROM vista_societa WHERE id_societa = ?",
+				const [rows] = await connection.execute<SocietaRow[]>(
+					"SELECT * FROM dettaglio_societa WHERE id_societa = ?",
 					[id]
 				)
 				return rows[0]
 			} else {
-				const [rows] = await connection.execute(
-					"SELECT * FROM vista_societa"
+				const [rows] = await connection.execute<SocietaRow[]>(
+					"SELECT * FROM dettaglio_societa"
 				)
 				return rows
 			}
 		} else if (method === "POST") {
-			const { nome_societa, pagato, resto_consegnato } = body
+			const { nome_societa, pagato, resto_consegnato } =
+				body as SocietaRow
 
-			const [result] = await connection.execute(
+			const [result] = await connection.execute<ResultSetHeader>(
 				"INSERT INTO societa (nome_societa, pagato, resto_consegnato) VALUES (?, ?, ?)",
 				[nome_societa || null, pagato || 0, resto_consegnato || 0]
 			)
@@ -59,7 +49,8 @@ export default defineEventHandler(async (event) => {
 			return { id_societa: result.insertId, ...body }
 		} else if (method === "PUT") {
 			const { id } = query
-			const { nome_societa, pagato, resto_consegnato } = body
+			const { nome_societa, pagato, resto_consegnato } =
+				body as SocietaRow
 
 			await connection.execute(
 				"UPDATE societa SET nome_societa = ?, pagato = ?, resto_consegnato = ? WHERE id_societa = ?",
@@ -97,10 +88,13 @@ export default defineEventHandler(async (event) => {
 		}
 	} catch (error) {
 		console.error("Errore nella gestione delle società:", error)
-		throw createError({ statusCode: 500, message: error.message })
+		throw createError({
+			statusCode: (error as MySQLError).statusCode || 500,
+			message: (error as Error).message,
+		})
 	} finally {
 		if (connection) {
-			await connection.end()
+			connection.release()
 		}
 	}
 })

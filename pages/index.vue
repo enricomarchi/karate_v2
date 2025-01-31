@@ -249,62 +249,39 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from "vue"
+import { ref, onMounted, computed } from "vue"
 import { useFetch } from "nuxt/app"
 import LoadingOverlay from "@/components/LoadingOverlay.vue"
 
 const message = ref("")
 const error = ref(false)
+const loading = ref(false)
+const loadingMessage = ref("")
 
-const fasceCount = ref(0)
-const categorieCount = ref(0)
-const atletiCount = ref(0)
-const societaCount = ref(0)
+// Recupera solo i dati dalle API già implementate
+const { data: fasceData } = await useFetch("/api/fasce")
+const { data: categorieData } = await useFetch("/api/categorie")
+const { data: atletiData } = await useFetch("/api/atleti")
+const { data: societaData } = await useFetch("/api/societa")
+const { data: sovrapposteData } = await useFetch("/api/categorie-sovrapposte")
+
+// Computed properties per i conteggi delle API implementate
+const fasceCount = computed(() => fasceData.value?.length || 0)
+const categorieCount = computed(() => categorieData.value?.length || 0)
+const atletiCount = computed(() => atletiData.value?.length || 0)
+const societaCount = computed(() => societaData.value?.length || 0)
+const categorieSovrapposteCount = computed(
+	() => sovrapposteData.value?.length || 0
+)
+
+// Placeholder per i conteggi delle API non ancora implementate
 const iscrizioniCount = ref(0)
 const unassignedIscrizioniCount = ref(0)
-const categorieSovrapposteCount = ref(0)
 const unconfirmedIscrizioniCount = ref(0)
 const tabelloniCount = ref(0)
 const tabelloniBozzaCount = ref(0)
 const tabelloniAttiviCount = ref(0)
 const tabelloniCompletatiCount = ref(0)
-
-const loading = ref(false)
-const loadingMessage = ref("")
-
-const updateCounts = async () => {
-	const { data: fasceData } = await useFetch("/api/fasce")
-	const { data: categorieData } = await useFetch("/api/categorie")
-	const { data: atletiData } = await useFetch("/api/atleti")
-	const { data: societaData } = await useFetch("/api/societa")
-	const { data: iscrizioniData } = await useFetch("/api/iscrizioni")
-	const { data: unassignedData } = await useFetch(
-		"/api/iscrizioni/unassigned"
-	)
-	const { data: sovrapposteData } = await useFetch(
-		"/api/categorie/sovrapposte"
-	)
-	const { data: daConfermare } = await useFetch(
-		"/api/iscrizioni/da-confermare"
-	)
-	const { data: tabelloniData } = await useFetch("/api/tabelloni")
-
-	fasceCount.value = fasceData.value?.length || 0
-	categorieCount.value = categorieData.value?.length || 0
-	atletiCount.value = atletiData.value?.length || 0
-	societaCount.value = societaData.value?.length || 0
-	iscrizioniCount.value = iscrizioniData.value?.length || 0
-	unassignedIscrizioniCount.value = unassignedData.value?.length || 0
-	categorieSovrapposteCount.value = sovrapposteData.value?.length || 0
-	unconfirmedIscrizioniCount.value = daConfermare.value?.length || 0
-	tabelloniCount.value = tabelloniData.value?.length || 0
-	tabelloniBozzaCount.value =
-		tabelloniData.value?.filter((t) => t.stato === "BOZZA").length || 0
-	tabelloniAttiviCount.value =
-		tabelloniData.value?.filter((t) => t.stato === "ATTIVO").length || 0
-	tabelloniCompletatiCount.value =
-		tabelloniData.value?.filter((t) => t.stato === "COMPLETATO").length || 0
-}
 
 const importData = async () => {
 	loading.value = true
@@ -319,9 +296,30 @@ const importData = async () => {
 			throw new Error(data.message || "Errore durante l'importazione")
 		}
 
+		// Aggiorna i dati dopo l'importazione
+		const [
+			{ data: newFasceData },
+			{ data: newCategorieData },
+			{ data: newAtletiData },
+			{ data: newSocietaData },
+			{ data: newSovrapposteData },
+		] = await Promise.all([
+			useFetch("/api/fasce"),
+			useFetch("/api/categorie"),
+			useFetch("/api/atleti"),
+			useFetch("/api/societa"),
+			useFetch("/api/categorie-sovrapposte"),
+		])
+
+		// Aggiorna i valori
+		fasceData.value = newFasceData.value
+		categorieData.value = newCategorieData.value
+		atletiData.value = newAtletiData.value
+		societaData.value = newSocietaData.value
+		sovrapposteData.value = newSovrapposteData.value
+
 		message.value = "Importazione completata con successo"
 		error.value = false
-		await updateCounts() // Aggiorna i conteggi dopo l'importazione
 	} catch (err) {
 		console.error("Errore durante l'importazione:", err)
 		message.value = "Errore durante l'importazione"
@@ -371,6 +369,6 @@ const exportData = async () => {
 }
 
 onMounted(() => {
-	updateCounts()
+	// Non è più necessario chiamare updateCounts
 })
 </script>

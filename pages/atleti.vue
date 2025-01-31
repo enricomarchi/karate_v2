@@ -182,71 +182,92 @@
 					</thead>
 					<tbody>
 						<tr
-							v-for="atleta in atletiFiltrati"
-							:key="atleta.id_atleta"
+							v-for="atletaRow in atletiFiltrati"
+							:key="atletaRow.id_atleta || 0"
 							:class="{
-								'bg-blue-200': selectedAtleti.includes(
-									atleta.id_atleta
-								),
+								'transition-all duration-200': true,
+								'bg-blue-200 hover:bg-blue-300':
+									selectedAtleti.includes(
+										atletaRow.id_atleta || 0
+									),
+								'bg-gray-100 hover:bg-gray-200':
+									dragTarget === atletaRow.id_atleta,
+								'bg-white hover:bg-gray-200':
+									!selectedAtleti.includes(
+										atletaRow.id_atleta || 0
+									) && dragTarget !== atletaRow.id_atleta,
 							}"
 							class="mb-4"
-							@click="toggleAtletaSelection(atleta.id_atleta)"
+							@click="
+								atletaRow.id_atleta &&
+									toggleAtletaSelection(atletaRow.id_atleta)
+							"
+							draggable="true"
+							@dragstart="onDragStart(convertToAtleta(atletaRow))"
+							@dragover.prevent="
+								onDragOver(convertToAtleta(atletaRow))
+							"
+							@dragleave="onDragLeave(convertToAtleta(atletaRow))"
+							@drop="onDrop(convertToAtleta(atletaRow))"
 						>
 							<td class="border px-4 py-2 cursor-pointer">
 								<input
 									type="checkbox"
 									:checked="
 										selectedAtleti.includes(
-											atleta.id_atleta
+											atletaRow.id_atleta || 0
 										)
 									"
 								/>
 							</td>
 							<td class="border px-4 py-2">
-								{{ atleta.id_atleta }}
+								{{ atletaRow.id_atleta }}
 							</td>
 							<td class="border px-4 py-2">
-								{{ atleta.cognome }}
+								{{ atletaRow.cognome }}
 							</td>
 							<td class="border px-4 py-2">
-								{{ atleta.nome }}
+								{{ atletaRow.nome }}
 							</td>
 							<td class="border px-4 py-2 text-center">
-								{{ atleta.sesso }}
+								{{ atletaRow.sesso }}
 							</td>
 							<td class="border px-4 py-2">
-								{{ atleta.anno_nascita }}
+								{{ atletaRow.anno_nascita }}
 							</td>
 							<td class="border px-4 py-2">
-								{{ atleta.cintura }}
+								{{ atletaRow.cintura }}
 							</td>
 							<td class="border px-4 py-2">
-								{{ atleta.dan }}
+								{{ atletaRow.dan }}
 							</td>
 							<td class="border px-4 py-2">
-								{{ atleta.peso_kg }}
+								{{ atletaRow.peso_kg }}
 							</td>
 							<td class="border px-4 py-2">
-								{{ atleta.nome_societa }}
+								{{ atletaRow.nome_societa }}
 							</td>
 							<td class="border px-4 py-2">
 								<div class="flex items-center">
 									<button
-										@click.stop="editAtleta(atleta)"
+										@click.stop="editAtleta(atletaRow)"
 										class="text-gray-700 hover:bg-gray-100 p-2 rounded mx-1 hover:text-yellow-500"
 									>
 										<i class="fas fa-edit"></i>
 									</button>
 									<button
 										@click.stop="
-											deleteAtleta(atleta.id_atleta)
+											atletaRow.id_atleta &&
+												deleteAtleta(
+													atletaRow.id_atleta
+												)
 										"
 										class="text-gray-700 hover:bg-gray-100 p-2 rounded mx-1 hover:text-red-500"
 									>
 										<i class="fas fa-trash"></i>
 									</button>
 									<button
-										@click.stop="copyAtleta(atleta)"
+										@click.stop="copyAtleta(atletaRow)"
 										class="text-gray-700 hover:bg-gray-100 p-2 rounded mx-1 hover:text-blue-500"
 									>
 										<i class="fas fa-copy"></i>
@@ -259,96 +280,14 @@
 			</div>
 		</div>
 		<!-- Modale per il form di modifica/inserimento -->
-		<div
+		<AtletaFormModal
 			v-if="formVisible"
-			class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center z-50"
-		>
-			<div
-				class="bg-white p-6 rounded-lg shadow-lg w-full max-w-4xl overflow-auto max-h-full"
-			>
-				<h2 class="text-2xl font-bold mb-4">
-					{{
-						atleta.id_atleta ? "Modifica Atleta" : "Aggiungi Atleta"
-					}}
-				</h2>
-				<form @submit.prevent="saveAtleta" class="flex flex-wrap gap-4">
-					<input
-						v-model="atleta.cognome"
-						placeholder="Cognome"
-						class="border p-2 rounded w-full"
-					/>
-					<input
-						v-model="atleta.nome"
-						placeholder="Nome"
-						class="border p-2 rounded w-full"
-					/>
-					<select
-						v-model="atleta.sesso"
-						class="border p-2 rounded w-full"
-					>
-						<option value="M">Maschile</option>
-						<option value="F">Femminile</option>
-					</select>
-					<input
-						v-model="atleta.anno_nascita"
-						type="number"
-						placeholder="Anno Nascita"
-						class="border p-2 rounded w-full"
-					/>
-					<select
-						v-model="atleta.cintura_id"
-						class="border p-2 rounded w-full"
-					>
-						<option
-							v-for="cintura in cinture"
-							:key="cintura.id_cintura"
-							:value="cintura.id_cintura"
-						>
-							{{ cintura.colore }}
-						</option>
-					</select>
-					<input
-						v-model="atleta.dan"
-						type="number"
-						placeholder="Dan"
-						class="border p-2 rounded w-full"
-					/>
-					<input
-						v-model="atleta.peso_kg"
-						type="number"
-						placeholder="Peso"
-						class="border p-2 rounded w-full"
-					/>
-					<select
-						v-model="atleta.id_societa"
-						class="border p-2 rounded w-full"
-					>
-						<option
-							v-for="societa in societa"
-							:key="societa.id_societa"
-							:value="societa.id_societa"
-						>
-							{{ societa.nome_societa }}
-						</option>
-					</select>
-					<div class="w-full flex justify-end gap-4">
-						<button
-							type="submit"
-							class="bg-blue-500 text-white p-2 rounded"
-						>
-							Salva
-						</button>
-						<button
-							@click="closeForm"
-							type="button"
-							class="bg-gray-500 text-white p-2 rounded"
-						>
-							Annulla
-						</button>
-					</div>
-				</form>
-			</div>
-		</div>
+			:atleta="atleta"
+			:cinture="cinture"
+			:societa="societa"
+			@close="closeForm"
+			@save="saveAtleta"
+		/>
 		<div v-if="feedbackMessage" :class="`alert ${feedbackType}`">
 			{{ feedbackMessage }}
 		</div>
@@ -356,43 +295,116 @@
 	</div>
 </template>
 
-<script setup>
-import { ref, onMounted, computed } from "vue"
-import { useFetch } from "#app"
+<script setup lang="ts">
+import { ref, computed, watch } from "vue"
+import { useFetch } from "nuxt/app"
 import LoadingOverlay from "@/components/LoadingOverlay.vue"
+import type {
+	AtletaRow,
+	CinturaRow,
+	SocietaRow,
+	MySQLError,
+	Atleta, // Importa il tipo Atleta
+	Cintura,
+	Societa,
+} from "~/types/global"
+import AtletaFormModal from "../components/AtletaFormModal.vue"
 
-const atleta = ref({
-	id_atleta: null,
+// Cambia il tipo di atleta a Atleta
+const atleta = ref<Atleta>({
+	id_atleta: undefined,
 	cognome: "",
 	nome: "",
-	sesso: "",
-	anno_nascita: null,
-	cintura_id: null,
-	dan: null,
-	peso_kg: null,
-	id_societa: null,
+	sesso: undefined,
+	anno_nascita: undefined,
+	cintura_id: undefined,
+	dan: undefined,
+	peso_kg: undefined,
+	id_societa: undefined,
+	cintura: {
+		id_cintura: undefined,
+		colore: "",
+		kyu: undefined,
+	},
+	societa: {
+		id_societa: undefined,
+		nome_societa: "",
+		pagato: undefined,
+		resto_consegnato: undefined,
+	},
 })
 
 const formVisible = ref(false)
-
-const selectedAtleti = ref([])
-const atleti = ref([]) // Spostato qui per chiarezza
-
-// Rimuovi queste righe che usano useFetch direttamente
-// const { data: cinture } = useFetch("/api/cinture")
-// const { data: societa } = useFetch("/api/societa")
-
-// Aggiungi queste refs
-const cinture = ref([])
-const societa = ref([])
-
-const feedbackMessage = ref("")
-const feedbackType = ref("")
-
+const dragTarget = ref<number | undefined>(undefined)
 const loading = ref(false)
 const loadingMessage = ref("")
+const feedbackMessage = ref("")
+const feedbackType = ref<"success" | "error">("success")
 
-// Aggiungi la definizione dei filtri
+const { data: atleti } = await useFetch<AtletaRow[]>("/api/atleti")
+const { data: cinture } = await useFetch<CinturaRow[]>("/api/cinture")
+const { data: societa } = await useFetch<SocietaRow[]>("/api/societa")
+
+const selectedAtleti = ref<number[]>([])
+
+// Add drag and drop handlers
+let draggedAtleta: Atleta | null = null
+
+const onDragStart = (atleta: Atleta) => {
+	draggedAtleta = atleta
+}
+
+const onDragOver = (atleta: Atleta) => {
+	dragTarget.value = atleta.id_atleta
+}
+
+const onDragLeave = (atleta: Atleta) => {
+	if (dragTarget.value === atleta.id_atleta) {
+		dragTarget.value = undefined
+	}
+}
+
+const onDrop = async (targetAtleta: Atleta) => {
+	dragTarget.value = undefined
+	if (draggedAtleta && draggedAtleta.id_atleta !== targetAtleta.id_atleta) {
+		const tempOrder = draggedAtleta.id_atleta
+		draggedAtleta.id_atleta = targetAtleta.id_atleta
+		targetAtleta.id_atleta = tempOrder
+
+		// Aggiorna solo il campo id_atleta nel backend
+		await useFetch(`/api/atleti`, {
+			method: "PUT",
+			query: { id: draggedAtleta.id_atleta },
+			body: { id_atleta: draggedAtleta.id_atleta },
+		})
+		await useFetch(`/api/atleti`, {
+			method: "PUT",
+			query: { id: targetAtleta.id_atleta },
+			body: { id_atleta: targetAtleta.id_atleta },
+		})
+
+		// Ricarica tutti i dati necessari
+		const [{ data: atletiAggiornati }] = await Promise.all([
+			useFetch<AtletaRow[]>("/api/atleti"),
+		])
+
+		// Aggiorna tutti i riferimenti
+		atleti.value = atletiAggiornati.value
+
+		// Riapplica l'ordinamento corrente
+		if (sortKey.value) {
+			atleti.value.sort((a, b) => {
+				if (a[sortKey.value] < b[sortKey.value])
+					return sortAsc.value ? -1 : 1
+				if (a[sortKey.value] > b[sortKey.value])
+					return sortAsc.value ? 1 : -1
+				return 0
+			})
+		}
+	}
+	draggedAtleta = null
+}
+
 const filters = ref({
 	search: "",
 	societa: "",
@@ -400,7 +412,6 @@ const filters = ref({
 	cintura: "",
 })
 
-// Aggiungi la computed property per gli atleti filtrati
 const atletiFiltrati = computed(() => {
 	if (!atleti.value) return []
 
@@ -465,80 +476,101 @@ const openForm = () => {
 
 const closeForm = () => {
 	formVisible.value = false
+	// Reset with an empty object
 	atleta.value = {
-		id_atleta: null,
+		id_atleta: undefined,
 		cognome: "",
 		nome: "",
-		sesso: "",
-		anno_nascita: null,
-		cintura_id: null,
-		dan: null,
-		peso_kg: null,
-		id_societa: null,
+		sesso: undefined,
+		anno_nascita: undefined,
+		cintura_id: undefined,
+		dan: undefined,
+		peso_kg: undefined,
+		id_societa: undefined,
+		cintura: {
+			id_cintura: undefined,
+			colore: "",
+			kyu: undefined,
+		},
+		societa: {
+			id_societa: undefined,
+			nome_societa: "",
+			pagato: undefined,
+			resto_consegnato: undefined,
+		},
 	}
 }
 
-const saveAtleta = async () => {
+// Update the saveAtleta function to handle Atleta
+const saveAtleta = async (savedAtleta: Atleta) => {
 	try {
-		if (atleta.value.id_atleta) {
-			const { data, error } = await useFetch(
-				`/api/atleti?id=${atleta.value.id_atleta}`,
-				{
-					method: "PUT",
-					body: { ...atleta.value },
-				}
-			)
-			if (error.value) {
-				console.error(
-					"Errore nel salvataggio dell'atleta:",
-					error.value
-				)
-			} else {
-				const index = atleti.value.findIndex(
-					(a) => a.id_atleta === atleta.value.id_atleta
-				)
-				atleti.value[index] = { ...data.value }
-				// Aggiorna la cintura e la società
-				atleti.value[index].cintura = cinture.value.find(
-					(c) => c.id_cintura === atleta.value.cintura_id
-				)?.colore
-				atleti.value[index].nome_societa = societa.value.find(
-					(s) => s.id_societa === atleta.value.id_societa
-				)?.nome_societa
+		loading.value = true
+		loadingMessage.value = savedAtleta.id_atleta
+			? "Aggiornamento atleta..."
+			: "Creazione atleta..."
+
+		const { data: response } = await useFetch(
+			`/api/atleti${
+				savedAtleta.id_atleta ? `?id=${savedAtleta.id_atleta}` : ""
+			}`,
+			{
+				method: savedAtleta.id_atleta ? "PUT" : "POST",
+				body: savedAtleta,
 			}
-		} else {
-			const { data, error } = await useFetch("/api/atleti", {
-				method: "POST",
-				body: { ...atleta.value },
-			})
-			if (error.value) {
-				console.error(
-					"Errore nel salvataggio dell'atleta:",
-					error.value
-				)
-			} else {
-				// Aggiorna la cintura e la società
-				data.value.cintura = cinture.value.find(
-					(c) => c.id_cintura === atleta.value.cintura_id
-				)?.colore
-				data.value.nome_societa = societa.value.find(
-					(s) => s.id_societa === atleta.value.id_societa
-				)?.nome_societa
-				atleti.value.push(data.value)
-			}
-		}
+		)
+
+		// Ricarica i dati
+		const { data: atletiAggiornati } = await useFetch<AtletaRow[]>(
+			"/api/atleti"
+		)
+		atleti.value = atletiAggiornati.value
+
 		closeForm()
+		feedbackMessage.value = `Atleta ${
+			savedAtleta.id_atleta ? "aggiornato" : "creato"
+		} con successo`
+		feedbackType.value = "success"
 	} catch (error) {
-		console.error("Errore nel salvataggio dell'atleta:", error)
+		const mysqlError = error as MySQLError
+		feedbackMessage.value =
+			mysqlError.message || "Errore durante il salvataggio"
+		feedbackType.value = "error"
+	} finally {
+		loading.value = false
 	}
 }
 
-const editAtleta = (atletaToEdit) => {
-	atleta.value = { ...atletaToEdit }
+// Update the editAtleta function
+const editAtleta = (atletaToEdit: AtletaRow) => {
+	// Creiamo un nuovo oggetto Atleta con la struttura corretta
+	const editedAtleta: Atleta = {
+		id_atleta: atletaToEdit.id_atleta,
+		cognome: atletaToEdit.cognome,
+		nome: atletaToEdit.nome,
+		sesso: atletaToEdit.sesso,
+		anno_nascita: atletaToEdit.anno_nascita,
+		cintura_id: atletaToEdit.cintura_id,
+		dan: atletaToEdit.dan,
+		peso_kg: atletaToEdit.peso_kg,
+		id_societa: atletaToEdit.id_societa,
+		cintura: {
+			id_cintura: atletaToEdit.cintura_id,
+			colore: atletaToEdit.cintura || "",
+			kyu: atletaToEdit.kyu,
+		},
+		societa: {
+			id_societa: atletaToEdit.id_societa,
+			nome_societa: atletaToEdit.nome_societa || "",
+			pagato: undefined,
+			resto_consegnato: undefined,
+		},
+	}
+
+	atleta.value = editedAtleta
 	formVisible.value = true
 }
 
-const deleteAtleta = async (id_atleta) => {
+const deleteAtleta = async (id_atleta: number) => {
 	try {
 		const { error } = await useFetch(`/api/atleti?id=${id_atleta}`, {
 			method: "DELETE",
@@ -556,7 +588,7 @@ const deleteAtleta = async (id_atleta) => {
 	}
 }
 
-const toggleAtletaSelection = (id_atleta) => {
+const toggleAtletaSelection = (id_atleta: number) => {
 	const index = selectedAtleti.value.indexOf(id_atleta)
 	if (index === -1) {
 		selectedAtleti.value.push(id_atleta)
@@ -591,18 +623,42 @@ const deleteSelectedAtleti = async () => {
 	}
 }
 
-const copyAtleta = async (atleta) => {
-	const newAtleta = { ...atleta, id_atleta: null }
+// Update copyAtleta to use Atleta type
+const copyAtleta = async (atletaOriginal: AtletaRow) => {
+	// Creiamo un nuovo oggetto Atleta con la struttura corretta
+	const newAtleta: Atleta = {
+		cognome: atletaOriginal.cognome,
+		nome: atletaOriginal.nome,
+		sesso: atletaOriginal.sesso,
+		anno_nascita: atletaOriginal.anno_nascita,
+		cintura_id: atletaOriginal.cintura_id,
+		dan: atletaOriginal.dan,
+		peso_kg: atletaOriginal.peso_kg,
+		id_societa: atletaOriginal.id_societa,
+		cintura: {
+			id_cintura: atletaOriginal.cintura_id,
+			colore: atletaOriginal.cintura || "",
+			kyu: atletaOriginal.kyu,
+		},
+		societa: {
+			id_societa: atletaOriginal.id_societa,
+			nome_societa: atletaOriginal.nome_societa || "",
+			pagato: undefined,
+			resto_consegnato: undefined,
+		},
+	}
+
 	if (!newAtleta.id_societa || !newAtleta.cintura_id) {
 		console.error(
 			"Errore: id_societa e cintura_id non possono essere nulli"
 		)
 		return
 	}
+
 	try {
 		const { data, error } = await useFetch("/api/atleti", {
 			method: "POST",
-			body: { ...newAtleta },
+			body: newAtleta,
 		})
 		if (error.value) {
 			console.error("Errore nella copia dell'atleta:", error.value)
@@ -623,8 +679,12 @@ const copySelectedAtleti = async () => {
 
 	try {
 		for (const id_atleta of selectedAtleti.value) {
-			const atleta = atleti.value.find((a) => a.id_atleta === id_atleta)
-			await copyAtleta(atleta)
+			const atletaToFind = atleti.value.find(
+				(a) => a.id_atleta === id_atleta
+			)
+			if (atletaToFind) {
+				await copyAtleta(atletaToFind)
+			}
 		}
 		feedbackMessage.value = "Atleti copiati con successo"
 		feedbackType.value = "success"
@@ -662,55 +722,38 @@ const toggleAllSelection = () => {
 	if (selectedAtleti.value.length === atleti.value.length) {
 		selectedAtleti.value = []
 	} else {
-		selectedAtleti.value = atleti.value.map((atleta) => atleta.id_atleta)
+		// Filtra gli id_atleta undefined prima di assegnarli
+		selectedAtleti.value = atleti.value
+			.map((atleta) => atleta.id_atleta)
+			.filter((id): id is number => id !== undefined)
 	}
 }
 
-const refreshAtleti = async () => {
-	loading.value = true
-	loadingMessage.value = "Caricamento dati in corso..."
-	try {
-		// Carica i dati usando async/await in modo più esplicito
-		const atletiResponse = await $fetch("/api/atleti")
-		const cintureResponse = await $fetch("/api/cinture")
-		const societaResponse = await $fetch("/api/societa")
-
-		// Verifica e assegna i dati
-		if (!atletiResponse) {
-			throw new Error("Nessun dato ricevuto per gli atleti")
-		}
-		atleti.value = atletiResponse
-
-		if (!cintureResponse) {
-			throw new Error("Nessun dato ricevuto per le cinture")
-		}
-		cinture.value = cintureResponse
-
-		if (!societaResponse) {
-			throw new Error("Nessun dato ricevuto per le società")
-		}
-		societa.value = societaResponse
-
-		console.log("Dati caricati:", {
-			atleti: atleti.value.length,
-			cinture: cinture.value.length,
-			societa: societa.value.length,
-		})
-	} catch (error) {
-		console.error("Errore nel caricamento dei dati:", error)
-		feedbackMessage.value =
-			error.message || "Errore nel caricamento dei dati"
-		feedbackType.value = "error"
-	} finally {
-		loading.value = false
-		loadingMessage.value = ""
+// Funzione helper per convertire AtletaRow in Atleta
+const convertToAtleta = (atletaRow: AtletaRow): Atleta => {
+	return {
+		id_atleta: atletaRow.id_atleta,
+		cognome: atletaRow.cognome,
+		nome: atletaRow.nome,
+		sesso: atletaRow.sesso,
+		anno_nascita: atletaRow.anno_nascita,
+		cintura_id: atletaRow.cintura_id,
+		dan: atletaRow.dan,
+		peso_kg: atletaRow.peso_kg,
+		id_societa: atletaRow.id_societa,
+		cintura: {
+			id_cintura: atletaRow.cintura_id,
+			colore: atletaRow.cintura || "",
+			kyu: atletaRow.kyu,
+		},
+		societa: {
+			id_societa: atletaRow.id_societa,
+			nome_societa: atletaRow.nome_societa || "",
+			pagato: undefined,
+			resto_consegnato: undefined,
+		},
 	}
 }
-
-// Assicuriamoci che il caricamento avvenga all'mount del componente
-onMounted(() => {
-	refreshAtleti()
-})
 </script>
 
 <style scoped>

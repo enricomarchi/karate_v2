@@ -384,3 +384,58 @@ WHERE
         OR (cin2.max_kyu BETWEEN cin1.min_kyu AND cin1.max_kyu)
     );
 
+-- Vista per i dettagli completi degli atleti
+CREATE OR REPLACE VIEW dettaglio_atleti AS
+SELECT 
+    a.id_atleta,
+    a.cognome,
+    a.nome,
+    a.sesso,
+    a.anno_nascita,
+    a.cintura_id,
+    a.dan,
+    a.peso_kg,
+    a.id_societa,
+    c.colore as cintura,
+    c.kyu,
+    s.nome_societa
+FROM atleti a
+LEFT JOIN cinture c ON a.cintura_id = c.id_cintura
+LEFT JOIN societa s ON a.id_societa = s.id_societa;
+
+-- Vista per trovare le categorie appropriate per un atleta
+CREATE OR REPLACE VIEW categoria_per_atleta AS
+SELECT DISTINCT
+    c.id_categoria,
+    c.nome,
+    c.id_disciplina,
+    c.sesso,
+    a.id_atleta,
+    d.valore as disciplina_nome
+FROM atleti a
+CROSS JOIN categorie c
+JOIN discipline d ON c.id_disciplina = d.id_disciplina
+JOIN categorie_cinture cc ON c.id_categoria = cc.id_categoria
+JOIN categorie_fasce cf ON c.id_categoria = cf.id_categoria
+JOIN fasce_eta fe ON cf.id_fascia = fe.id_fascia
+WHERE cc.id_cintura = a.cintura_id
+    AND a.anno_nascita BETWEEN fe.anno_nascita_min AND fe.anno_nascita_max
+    AND (c.sesso = a.sesso OR c.sesso = 'X')
+    AND (
+        (c.peso_min IS NULL AND c.peso_max IS NULL)
+        OR (
+            a.peso_kg IS NOT NULL 
+            AND a.peso_kg >= c.peso_min 
+            AND a.peso_kg <= c.peso_max
+        )
+    );
+
+-- Vista per i dettagli delle società
+CREATE OR REPLACE VIEW dettaglio_societa AS
+SELECT 
+    id_societa,
+    nome_societa,
+    pagato,
+    resto_consegnato
+FROM societa;
+

@@ -33,6 +33,15 @@ export const getSessoOptions = (): SessoOption[] => {
 	}))
 }
 
+// Definizione dei valori possibili per il livello kata
+export const LIVELLO_VALUES = {
+	BASE: "BASE",
+	INTERMEDIO: "INTERMEDIO",
+	AVANZATO: "AVANZATO",
+} as const
+
+export type LivelloValue = (typeof LIVELLO_VALUES)[keyof typeof LIVELLO_VALUES]
+
 // ============================= SEZIONE ROW =============================
 
 // Interfacce Row per mysql2
@@ -49,6 +58,28 @@ export interface CategoriaRow extends RowDataPacket {
 }
 export interface FasciaRow extends Fascia, RowDataPacket {}
 export interface CinturaRow extends Cintura, RowDataPacket {}
+export interface KataRow extends RowDataPacket {
+	id_kata?: number
+	codice?: string
+	nome?: string
+	livello?: LivelloValue
+}
+export interface AtletaRow extends RowDataPacket {
+	id_atleta?: number
+	cognome?: string
+	nome?: string
+	sesso?: "M" | "F"
+	anno_nascita?: number
+	cintura_id?: number
+	dan?: number
+	peso_kg?: number
+	id_societa?: number
+	cintura?: string // Campo piatto dalla vista
+	kyu?: number // Campo piatto dalla vista
+	nome_societa?: string // Campo piatto dalla vista
+}
+export interface SocietaRow extends Societa, RowDataPacket {}
+export interface IscrizioneRow extends Iscrizione, RowDataPacket {}
 
 // ============================= SEZIONE DB SQL =============================
 
@@ -102,4 +133,42 @@ export interface CategorieSovrapposte extends RowDataPacket {
 	cat2_nome?: string
 	id_disciplina?: string
 	disciplina?: string
+}
+
+// Tipo base per l'atleta che include gli oggetti correlati
+export interface Atleta {
+	id_atleta?: number
+	cognome?: string
+	nome?: string
+	sesso?: "M" | "F"
+	anno_nascita?: number
+	cintura_id?: number
+	dan?: number
+	peso_kg?: number
+	id_societa?: number
+	// Oggetti correlati
+	cintura?: Cintura
+	societa?: Societa
+}
+
+// Tipo base per la società come appare nella tabella
+export interface Societa {
+	id_societa?: number
+	nome_societa?: string
+	pagato?: number
+	resto_consegnato?: number
+}
+
+// Interfaccia per le iscrizioni
+export interface Iscrizione {
+	id_iscrizione?: number
+	id_atleta?: number
+	id_disciplina?: string
+	id_categoria?: number
+	id_tabellone?: number | null
+	data_iscrizione?: Date
+	manuale?: boolean
+	confermata?: boolean
+	ammesso_in_finale?: boolean
+	classifica?: number | null
 }

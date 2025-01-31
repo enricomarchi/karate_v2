@@ -1,21 +1,12 @@
-import mysql from "mysql2/promise"
-import dotenv from "dotenv"
 import { defineEventHandler, getQuery, readBody, assertMethod } from "h3"
-
-dotenv.config()
-
-const dbConfig = {
-	host: process.env.DB_HOST,
-	user: process.env.DB_USER,
-	password: process.env.DB_PASSWORD,
-	database: process.env.DB_NAME,
-	connectTimeout: 10000, // 10 secondi di timeout per la connessione
-}
+import { getConnection } from "../utils/db"
+import type { ResultSetHeader } from "mysql2/promise"
+import type { CinturaRow, Cintura, MySQLError } from "~/types/global"
 
 export default defineEventHandler(async (event) => {
 	const method = event.node.req.method
 	const query = getQuery(event)
-	let body = {}
+	let body: Cintura = {} as Cintura
 
 	if (method !== "GET") {
 		body = await readBody(event)
@@ -26,41 +17,38 @@ export default defineEventHandler(async (event) => {
 	try {
 		assertMethod(event, ["GET", "POST", "PUT", "DELETE"])
 
-		connection = await mysql.createConnection(dbConfig)
+		connection = await getConnection()
 
 		if (method === "GET") {
-			const [rows] = await connection.execute("SELECT * FROM cinture")
+			const [rows] = await connection.execute<CinturaRow[]>(
+				"SELECT * FROM cinture ORDER BY kyu DESC"
+			)
 			return rows
 		} else if (method === "POST") {
-			const { colore, kyu, dan } = body
-			if (!colore || kyu === undefined || dan === undefined) {
+			const { colore, kyu } = body as Cintura
+			if (!colore || kyu === undefined) {
 				throw new Error("Parametri mancanti")
 			}
 
-			const [result] = await connection.execute(
-				"INSERT INTO cinture (colore, kyu, dan) VALUES (?, ?, ?)",
-				[colore, kyu, dan]
+			const [result] = await connection.execute<ResultSetHeader>(
+				"INSERT INTO cinture (colore, kyu) VALUES (?, ?)",
+				[colore, kyu]
 			)
-			return {
+			const response: Cintura = {
 				id_cintura: result.insertId,
 				colore,
 				kyu,
-				dan,
 			}
+			return response
 		} else if (method === "PUT") {
 			const { id } = query
-			const { colore, kyu, dan } = body
-			if (id && colore && kyu !== undefined && dan !== undefined) {
+			const { colore, kyu } = body as Cintura
+			if (id && colore && kyu !== undefined) {
 				await connection.execute(
-					"UPDATE cinture SET colore = ?, kyu = ?, dan = ? WHERE id_cintura = ?",
-					[colore, kyu, dan, id]
+					"UPDATE cinture SET colore = ?, kyu = ? WHERE id_cintura = ?",
+					[colore, kyu, id]
 				)
-				return {
-					id,
-					colore,
-					kyu,
-					dan,
-				}
+				return { id, colore, kyu }
 			} else {
 				throw new Error(
 					"Parametri mancanti per l'aggiornamento della cintura"
@@ -82,10 +70,11 @@ export default defineEventHandler(async (event) => {
 		}
 	} catch (error) {
 		console.error("Errore nella gestione delle cinture:", error)
-		return { success: false, error: error.message }
+		const mysqlError = error as MySQLError
+		return { success: false, error: mysqlError.message }
 	} finally {
 		if (connection) {
-			await connection.end()
+			connection.release()
 		}
 	}
 })
