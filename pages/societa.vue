@@ -40,25 +40,6 @@
 									@click="toggleAllSelection"
 								/>
 							</th>
-							<!-- Aggiunta colonna posizione -->
-							<th
-								class="border px-4 py-2 w-[100px] cursor-pointer"
-								@click="sortTable('posizione_classifica')"
-							>
-								Classifica
-								<span v-if="sortKey === 'posizione_classifica'">
-									{{ sortAsc ? "▲" : "▼" }}
-								</span>
-							</th>
-							<th
-								class="border px-4 py-2 w-[100px] cursor-pointer"
-								@click="sortTable('punteggio_totale')"
-							>
-								Punteggio
-								<span v-if="sortKey === 'punteggio_totale'">{{
-									sortAsc ? "▲" : "▼"
-								}}</span>
-							</th>
 							<th
 								class="border px-4 py-2 w-[250px] cursor-pointer"
 								@click="sortTable('nome_societa')"
@@ -67,49 +48,6 @@
 								<span v-if="sortKey === 'nome_societa'">
 									{{ sortAsc ? "▲" : "▼" }}
 								</span>
-							</th>
-							<!-- Nuove colonne -->
-							<th
-								class="border px-4 py-2 w-[100px] cursor-pointer"
-								@click="sortTable('numero_atleti')"
-							>
-								Atleti
-								<span v-if="sortKey === 'numero_atleti'">{{
-									sortAsc ? "▲" : "▼"
-								}}</span>
-							</th>
-							<th
-								class="border px-4 py-2 w-[100px] cursor-pointer"
-								@click="sortTable('numero_iscrizioni')"
-							>
-								Iscrizioni Tot
-								<span v-if="sortKey === 'numero_iscrizioni'">{{
-									sortAsc ? "▲" : "▼"
-								}}</span>
-							</th>
-							<th
-								class="border px-4 py-2 w-[100px] cursor-pointer"
-								@click="
-									sortTable('numero_iscrizioni_confermate')
-								"
-							>
-								Confermate
-								<span
-									v-if="
-										sortKey ===
-										'numero_iscrizioni_confermate'
-									"
-									>{{ sortAsc ? "▲" : "▼" }}</span
-								>
-							</th>
-							<th
-								class="border px-4 py-2 w-[120px] cursor-pointer"
-								@click="sortTable('importo_dovuto')"
-							>
-								Importo €
-								<span v-if="sortKey === 'importo_dovuto'">{{
-									sortAsc ? "▲" : "▼"
-								}}</span>
 							</th>
 							<th
 								class="border px-4 py-2 w-[120px] cursor-pointer"
@@ -128,15 +66,6 @@
 								<span v-if="sortKey === 'resto_consegnato'">{{
 									sortAsc ? "▲" : "▼"
 								}}</span>
-							</th>
-							<th
-								class="border px-4 py-2 w-[120px] cursor-pointer"
-								@click="sortTable('resto_da_consegnare')"
-							>
-								Da Consegnare €
-								<span v-if="sortKey === 'resto_da_consegnare'">
-									{{ sortAsc ? "▲" : "▼" }}
-								</span>
 							</th>
 							<th class="border px-4 py-2 w-[150px]">Azioni</th>
 						</tr>
@@ -165,35 +94,8 @@
 									"
 								/>
 							</td>
-							<!-- Aggiunta cella posizione -->
-							<td class="border px-4 py-2 text-center">
-								<span class="font-semibold"
-									>{{ societa.posizione_classifica }}°</span
-								>
-							</td>
-							<td class="border px-4 py-2 text-center">
-								{{ societa.punteggio_totale }}
-							</td>
 							<td class="border px-4 py-2 w-[250px]">
 								{{ societa.nome_societa }}
-							</td>
-							<td class="border px-4 py-2 text-center">
-								{{ societa.numero_atleti }}
-							</td>
-							<td class="border px-4 py-2 text-center">
-								{{ societa.numero_iscrizioni }}
-							</td>
-							<td class="border px-4 py-2 text-center">
-								{{ societa.numero_iscrizioni_confermate }}
-							</td>
-							<td class="border px-4 py-2 text-right">
-								{{
-									typeof societa.importo_dovuto === "number"
-										? societa.importo_dovuto.toFixed(2)
-										: Number(
-												societa.importo_dovuto
-										  ).toFixed(2)
-								}}
 							</td>
 							<td class="border px-4 py-2 text-right">
 								{{
@@ -208,22 +110,6 @@
 										? societa.resto_consegnato.toFixed(2)
 										: Number(
 												societa.resto_consegnato
-										  ).toFixed(2)
-								}}
-							</td>
-							<td
-								class="border px-4 py-2 text-right"
-								:class="{
-									'text-red-600':
-										societa.resto_da_consegnare > 0,
-								}"
-							>
-								{{
-									typeof societa.resto_da_consegnare ===
-									"number"
-										? societa.resto_da_consegnare.toFixed(2)
-										: Number(
-												societa.resto_da_consegnare
 										  ).toFixed(2)
 								}}
 							</td>
@@ -250,120 +136,13 @@
 				</table>
 			</div>
 		</div>
-		<!-- Modale per il form di modifica/inserimento -->
-		<div
+		<!-- Sostituire la modale esistente con il nuovo componente -->
+		<SocietaFormModal
 			v-if="formVisible"
-			class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center z-50"
-		>
-			<div
-				class="bg-white p-6 rounded-lg shadow-lg w-full max-w-4xl overflow-auto max-h-full"
-			>
-				<h2 class="text-2xl font-bold mb-4">
-					{{
-						societa.id_societa
-							? "Modifica Società"
-							: "Aggiungi Società"
-					}}
-				</h2>
-				<form
-					@submit.prevent="saveSocieta"
-					class="flex flex-wrap gap-4"
-				>
-					<!-- Campo Nome Società -->
-					<div class="w-full">
-						<label
-							class="block text-sm font-medium text-gray-700 mb-1"
-						>
-							Nome Società
-						</label>
-						<input
-							v-model="societa.nome_societa"
-							placeholder="Inserisci il nome della società"
-							class="border p-2 rounded w-full"
-						/>
-					</div>
-
-					<!-- Campo Importo Pagato -->
-					<div class="w-1/2">
-						<label
-							class="block text-sm font-medium text-gray-700 mb-1"
-						>
-							Importo Pagato (€)
-						</label>
-						<input
-							v-model.number="societa.pagato"
-							placeholder="0.00"
-							type="number"
-							step="0.01"
-							class="border p-2 rounded w-full"
-						/>
-					</div>
-
-					<!-- Campo Resto Consegnato -->
-					<div class="w-1/2">
-						<label
-							class="block text-sm font-medium text-gray-700 mb-1"
-						>
-							Resto Consegnato (€)
-						</label>
-						<input
-							v-model.number="societa.resto_consegnato"
-							placeholder="0.00"
-							type="number"
-							step="0.01"
-							class="border p-2 rounded w-full"
-						/>
-					</div>
-
-					<!-- Riepilogo valori calcolati -->
-					<div class="grid grid-cols-2 gap-4 w-full">
-						<div>
-							<label
-								class="block text-sm font-medium text-gray-700 mb-1"
-							>
-								Importo Dovuto
-							</label>
-							<p class="text-lg font-bold">
-								{{ societa.importo_dovuto?.toFixed(2) }} €
-							</p>
-						</div>
-						<div>
-							<label
-								class="block text-sm font-medium text-gray-700 mb-1"
-							>
-								Resto da Consegnare
-							</label>
-							<p
-								class="text-lg font-bold"
-								:class="{
-									'text-red-600':
-										societa.resto_da_consegnare > 0,
-								}"
-							>
-								{{ societa.resto_da_consegnare?.toFixed(2) }} €
-							</p>
-						</div>
-					</div>
-
-					<!-- Pulsanti -->
-					<div class="w-full flex justify-end gap-4">
-						<button
-							type="submit"
-							class="bg-blue-500 text-white p-2 rounded"
-						>
-							Salva
-						</button>
-						<button
-							@click="closeForm"
-							type="button"
-							class="bg-gray-500 text-white p-2 rounded"
-						>
-							Annulla
-						</button>
-					</div>
-				</form>
-			</div>
-		</div>
+			:societa="societa"
+			@close="closeForm"
+			@save="saveSocieta"
+		/>
 		<div v-if="feedbackMessage" :class="`alert ${feedbackType}`">
 			{{ feedbackMessage }}
 		</div>
@@ -371,31 +150,30 @@
 	</div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted } from "vue"
-import { useFetch } from "#app"
+import { useFetch } from "nuxt/app"
 import LoadingOverlay from "@/components/LoadingOverlay.vue"
+import SocietaFormModal from "@/components/SocietaFormModal.vue"
 import { useSocietaPrint } from "@/composables/prints/useSocietaPrint"
+import type { SocietaRow, MySQLError, Societa } from "~/types/global"
 
-const societa = ref({
-	id_societa: null,
+const societa = ref<Societa>({
+	id_societa: undefined,
 	nome_societa: "",
 	pagato: 0,
 	resto_consegnato: 0,
-	importo_dovuto: 0,
-	resto_da_consegnare: 0,
-	numero_atleti: 0,
-	numero_iscrizioni: 0,
-	numero_iscrizioni_confermate: 0,
-	punteggio_totale: 0,
-	posizione_classifica: 0,
 })
 
 const formVisible = ref(false)
+const loading = ref(false)
+const loadingMessage = ref("")
 
-const { data: societaList, error } = useFetch("/api/societa")
+const { data: societaList, error } = await useFetch<SocietaRow[]>(
+	"/api/societa"
+)
 
-const selectedSocieta = ref([])
+const selectedSocieta = ref<number[]>([])
 
 const openForm = () => {
 	formVisible.value = true
@@ -404,22 +182,15 @@ const openForm = () => {
 const closeForm = () => {
 	formVisible.value = false
 	societa.value = {
-		id_societa: null,
+		id_societa: undefined,
 		nome_societa: "",
 		pagato: 0,
 		resto_consegnato: 0,
-		importo_dovuto: 0,
-		resto_da_consegnare: 0,
-		numero_atleti: 0,
-		numero_iscrizioni: 0,
-		numero_iscrizioni_confermate: 0,
-		punteggio_totale: 0,
-		posizione_classifica: 0,
 	}
 }
 
 const feedbackMessage = ref("")
-const feedbackType = ref("")
+const feedbackType = ref<"success" | "error">("success")
 
 const saveSocieta = async () => {
 	loading.value = true
@@ -428,44 +199,28 @@ const saveSocieta = async () => {
 
 	try {
 		if (societa.value.id_societa) {
-			const { data, error } = await useFetch(
+			const { data } = await useFetch<SocietaRow>(
 				`/api/societa?id=${societa.value.id_societa}`,
 				{
 					method: "PUT",
-					body: { ...societa.value },
+					body: societa.value,
 				}
 			)
-			if (error.value) {
-				console.error(
-					"Errore nel salvataggio della società:",
-					error.value
-				)
-			} else {
-				// Ricarica i dati aggiornati da server
-				await reloadData()
-			}
 		} else {
-			const { data, error } = await useFetch("/api/societa", {
+			const { data } = await useFetch<SocietaRow>("/api/societa", {
 				method: "POST",
-				body: { ...societa.value },
+				body: societa.value,
 			})
-			if (error.value) {
-				console.error(
-					"Errore nel salvataggio della società:",
-					error.value
-				)
-			} else {
-				// Ricarica i dati aggiornati da server
-				await reloadData()
-			}
 		}
+		await reloadData()
 		feedbackMessage.value = "Società salvata con successo"
 		feedbackType.value = "success"
 		closeForm()
 	} catch (error) {
-		feedbackMessage.value = "Errore durante il salvataggio"
+		const mysqlError = error as MySQLError
+		feedbackMessage.value =
+			mysqlError.message || "Errore durante il salvataggio"
 		feedbackType.value = "error"
-		console.error("Errore nel salvataggio della società:", error)
 	} finally {
 		loading.value = false
 		document.body.style.cursor = "default"
@@ -475,33 +230,25 @@ const saveSocieta = async () => {
 	}
 }
 
-// Aggiungi questa nuova funzione per ricaricare i dati
 const reloadData = async () => {
-	const { data } = await useFetch("/api/societa")
+	const { data } = await useFetch<SocietaRow[]>("/api/societa")
 	if (data.value) {
 		societaList.value = data.value
 	}
 }
 
-const editSocieta = (societaToEdit) => {
+const editSocieta = (societaToEdit: SocietaRow) => {
 	// Converti esplicitamente i valori numerici
 	societa.value = {
-		...societaToEdit,
+		id_societa: societaToEdit.id_societa,
+		nome_societa: societaToEdit.nome_societa || "",
 		pagato: Number(societaToEdit.pagato) || 0,
 		resto_consegnato: Number(societaToEdit.resto_consegnato) || 0,
-		importo_dovuto: Number(societaToEdit.importo_dovuto) || 0,
-		resto_da_consegnare: Number(societaToEdit.resto_da_consegnare) || 0,
-		numero_atleti: Number(societaToEdit.numero_atleti) || 0,
-		numero_iscrizioni: Number(societaToEdit.numero_iscrizioni) || 0,
-		numero_iscrizioni_confermate:
-			Number(societaToEdit.numero_iscrizioni_confermate) || 0,
-		punteggio_totale: Number(societaToEdit.punteggio_totale) || 0,
-		posizione_classifica: Number(societaToEdit.posizione_classifica) || 0,
 	}
 	formVisible.value = true
 }
 
-const deleteSocieta = async (id_societa) => {
+const deleteSocieta = async (id_societa: number) => {
 	loading.value = true
 	loadingMessage.value = "Eliminazione in corso..."
 	document.body.style.cursor = "wait"
@@ -511,21 +258,18 @@ const deleteSocieta = async (id_societa) => {
 			method: "DELETE",
 		})
 		if (error.value) {
-			console.error(
-				"Errore nella cancellazione della società:",
-				error.value
-			)
-		} else {
-			societaList.value = societaList.value.filter(
-				(s) => s.id_societa !== id_societa
-			)
+			throw error.value
 		}
+		societaList.value = societaList.value.filter(
+			(s) => s.id_societa !== id_societa
+		)
 		feedbackMessage.value = "Società eliminata con successo"
 		feedbackType.value = "success"
 	} catch (error) {
-		feedbackMessage.value = "Errore durante l'eliminazione"
+		const mysqlError = error as MySQLError
+		feedbackMessage.value =
+			mysqlError.message || "Errore durante l'eliminazione"
 		feedbackType.value = "error"
-		console.error("Errore nella cancellazione della società:", error)
 	} finally {
 		loading.value = false
 		document.body.style.cursor = "default"
@@ -543,9 +287,6 @@ const toggleSocietaSelection = (id_societa) => {
 		selectedSocieta.value.splice(index, 1)
 	}
 }
-
-const loading = ref(false)
-const loadingMessage = ref("")
 
 const deleteSelectedSocieta = async () => {
 	if (selectedSocieta.value.length === 0) return
@@ -573,10 +314,11 @@ const deleteSelectedSocieta = async () => {
 	}
 }
 
-const sortKey = ref("")
+// Modifica la definizione di sortKey per accettare sia string che keyof SocietaRow
+const sortKey = ref<keyof SocietaRow | "">("")
 const sortAsc = ref(true)
 
-const sortTable = (key) => {
+const sortTable = (key: keyof SocietaRow) => {
 	if (sortKey.value === key) {
 		sortAsc.value = !sortAsc.value
 	} else {
@@ -584,19 +326,7 @@ const sortTable = (key) => {
 		sortAsc.value = true
 	}
 	societaList.value.sort((a, b) => {
-		// Gestione numerica per tutte le colonne numeriche
-		if (
-			[
-				"numero_atleti",
-				"punteggio_totale",
-				"posizione_classifica",
-				"numero_iscrizioni",
-				"numero_iscrizioni_confermate",
-			].includes(key)
-		) {
-			return sortAsc.value ? a[key] - b[key] : b[key] - a[key]
-		}
-		// Gestione alfabetica per il nome
+		// Gestione semplificata dell'ordinamento
 		if (a[key] < b[key]) return sortAsc.value ? -1 : 1
 		if (a[key] > b[key]) return sortAsc.value ? 1 : -1
 		return 0

@@ -135,10 +135,10 @@ CREATE TABLE atleti (
     anno_nascita INT NOT NULL,
     cintura_id INT,
     dan INT,
-    peso_kg DECIMAL(5,2),
+    peso_kg INT, -- Modificato da DECIMAL(5,2) a INT
     id_societa INT NOT NULL,
-    FOREIGN KEY (id_societa) REFERENCES societa(id_societa),
-    FOREIGN KEY (cintura_id) REFERENCES cinture(id_cintura)
+    FOREIGN KEY (id_societa) REFERENCES societa(id_societa) ON UPDATE CASCADE ON DELETE CASCADE,
+    FOREIGN KEY (cintura_id) REFERENCES cinture(id_cintura) ON UPDATE CASCADE ON DELETE SET NULL
 ) AUTO_INCREMENT = 1;
 
 CREATE TABLE categorie (
@@ -149,7 +149,7 @@ CREATE TABLE categorie (
     peso_min DECIMAL(5,2),
     peso_max DECIMAL(5,2),
     n_ordine INT,
-    FOREIGN KEY (id_disciplina) REFERENCES discipline(id_disciplina)
+    FOREIGN KEY (id_disciplina) REFERENCES discipline(id_disciplina) ON UPDATE CASCADE ON DELETE CASCADE
 ) AUTO_INCREMENT = 1;
 
 CREATE TABLE categorie_fasce (
@@ -226,10 +226,10 @@ CREATE TABLE iscrizioni (
     confermata BOOLEAN DEFAULT FALSE,
     ammesso_in_finale BOOLEAN DEFAULT FALSE,
     classifica INT DEFAULT NULL,
-    FOREIGN KEY (id_atleta) REFERENCES atleti(id_atleta),
-    FOREIGN KEY (id_categoria) REFERENCES categorie(id_categoria),
-    FOREIGN KEY (id_disciplina) REFERENCES discipline(id_disciplina),
-    FOREIGN KEY (id_tabellone) REFERENCES tabelloni(id_tabellone)
+    FOREIGN KEY (id_atleta) REFERENCES atleti(id_atleta) ON UPDATE CASCADE ON DELETE CASCADE,
+    FOREIGN KEY (id_categoria) REFERENCES categorie(id_categoria) ON UPDATE CASCADE ON DELETE CASCADE,
+    FOREIGN KEY (id_disciplina) REFERENCES discipline(id_disciplina) ON UPDATE CASCADE ON DELETE CASCADE,
+    FOREIGN KEY (id_tabellone) REFERENCES tabelloni(id_tabellone) ON UPDATE CASCADE ON DELETE SET NULL
 ) AUTO_INCREMENT = 1;
 
 CREATE TABLE prove (
@@ -261,9 +261,9 @@ CREATE TABLE incontri_prova (
     id_atleta_bianco INT NULL,
     ordine INT NOT NULL,
     turno VARCHAR(20) NOT NULL, 
-    FOREIGN KEY (id_prova) REFERENCES prove(id_prova) ON DELETE CASCADE,
-    FOREIGN KEY (id_atleta_rosso) REFERENCES atleti(id_atleta),
-    FOREIGN KEY (id_atleta_bianco) REFERENCES atleti(id_atleta)
+    FOREIGN KEY (id_prova) REFERENCES prove(id_prova) ON UPDATE CASCADE ON DELETE CASCADE,
+    FOREIGN KEY (id_atleta_rosso) REFERENCES atleti(id_atleta) ON UPDATE CASCADE ON DELETE SET NULL,
+    FOREIGN KEY (id_atleta_bianco) REFERENCES atleti(id_atleta) ON UPDATE CASCADE ON DELETE SET NULL
 );
 
 CREATE TABLE voti_incontro (

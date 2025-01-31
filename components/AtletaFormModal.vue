@@ -94,9 +94,10 @@
 					<div>
 						<label class="block mb-1">Peso (kg)</label>
 						<input
-							v-model="atleta.peso_kg"
+							v-model.number="atleta.peso_kg"
 							type="number"
-							step="0.1"
+							step="1"
+							min="0"
 							placeholder="Peso in kg"
 							class="border p-2 rounded w-full"
 						/>

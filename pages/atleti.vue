@@ -242,7 +242,7 @@
 								{{ atletaRow.dan }}
 							</td>
 							<td class="border px-4 py-2">
-								{{ atletaRow.peso_kg }}
+								{{ atletaRow.peso_kg || "-" }}
 							</td>
 							<td class="border px-4 py-2">
 								{{ atletaRow.nome_societa }}
