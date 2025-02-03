@@ -268,29 +268,38 @@ import LoadingOverlay from "@/components/LoadingOverlay.vue"
 import type {
 	Categoria,
 	Disciplina,
-	Fascia,
+	FasciaEta,
 	Cintura,
-	CategorieSovrapposte,
+	CategoriaFascia,
+	CategoriaCintura,
+} from "@prisma/client"
+import {
+	getSessoOptions,
+	type CategorieSovrapposte,
+	type CategoriaWithRelations,
 } from "~/types/global"
-import { getSessoOptions } from "~/types/global"
 
 // Rimuovi la definizione statica di sessoOptions e usa getSessoOptions
 const sessoOptions = getSessoOptions()
 
-const categoria: Ref<Categoria> = ref({
+// Update ref types
+const categoria = ref<Partial<CategoriaWithRelations>>({
 	nome: "",
 	id_disciplina: "",
-	sesso: undefined, // Modifica qui: rimuovi il default "X"
-	peso_min: null, // Ensure null is used instead of undefined
-	peso_max: null, // Ensure null is used instead of undefined
+	sesso: undefined,
+	peso_min: null,
+	peso_max: null,
 	n_ordine: null,
 	fasce: [],
 	cinture: [],
 })
 
-const { data: categorie } = await useFetch<Categoria[]>("/api/categorie")
+// Update API calls to use proper types
+const { data: categorie } = await useFetch<CategoriaWithRelations[]>(
+	"/api/categorie"
+)
 const { data: discipline } = await useFetch<Disciplina[]>("/api/discipline")
-const { data: fasceEta } = await useFetch<Fascia[]>("/api/fasce")
+const { data: fasceEta } = await useFetch<FasciaEta[]>("/api/fasce")
 const { data: cinture } = await useFetch<Cintura[]>("/api/cinture")
 
 // Modifica la chiamata API per utilizzare il nuovo tipo
@@ -406,7 +415,10 @@ const assignOrderNumbers = () => {
 	return Promise.all(promises)
 }
 
-const saveCategoria = async (savedCategoria: Categoria) => {
+// Update saveCategoria function to handle Prisma types
+const saveCategoria = async (
+	savedCategoria: Partial<CategoriaWithRelations>
+) => {
 	if (!savedCategoria.nome) {
 		console.error("Errore: il campo 'nome' non può essere nullo")
 		return
@@ -426,7 +438,7 @@ const saveCategoria = async (savedCategoria: Categoria) => {
 		{ data: categorieAggiornate },
 		{ data: categorieOverlapAggiornate },
 	] = await Promise.all([
-		useFetch<Categoria[]>("/api/categorie"),
+		useFetch<CategoriaWithRelations[]>("/api/categorie"),
 		useFetch<{ details: CategorieSovrapposte[]; overlappingIds: number[] }>(
 			"/api/categorie-sovrapposte" // URL corretto
 		),
@@ -500,7 +512,7 @@ const deleteCategoria = async (id_categoria?: number) => {
 			{ data: categorieAggiornate },
 			{ data: categorieOverlapAggiornate },
 		] = await Promise.all([
-			useFetch<Categoria[]>("/api/categorie"),
+			useFetch<CategoriaWithRelations[]>("/api/categorie"),
 			useFetch<number[]>("/api/categorie-sovrapposte"),
 		])
 
@@ -561,7 +573,7 @@ const copyCategoria = async (categoria: Categoria) => {
 		{ data: categorieAggiornate },
 		{ data: categorieOverlapAggiornate },
 	] = await Promise.all([
-		useFetch<Categoria[]>("/api/categorie"),
+		useFetch<CategoriaWithRelations[]>("/api/categorie"),
 		useFetch<{ details: CategorieSovrapposte[]; overlappingIds: number[] }>(
 			"/api/categorie-sovrapposte" // URL corretto
 		),
@@ -608,13 +620,15 @@ const copySelectedCategorie = async () => {
 const getFasce = (id_categoria?: number) => {
 	if (id_categoria === undefined) return []
 	const cat = categorie.value?.find((c) => c.id_categoria === id_categoria)
-	return cat?.fasce ?? []
+	// Accedi alla proprietà fascia nidificata per ogni fascia
+	return cat?.fasce.map((f) => f.fascia) ?? []
 }
 
 const getCinture = (id_categoria?: number) => {
 	if (id_categoria === undefined) return []
 	const cat = categorie.value?.find((c) => c.id_categoria === id_categoria)
-	return cat?.cinture ?? []
+	// Accedi alla proprietà cintura nidificata per ogni cintura
+	return cat?.cinture.map((c) => c.cintura) ?? []
 }
 
 const openAutomaticForm = () => {
@@ -643,7 +657,7 @@ const createCategorieAutomatiche = async (categorieData: Categoria[]) => {
 			{ data: categorieAggiornate },
 			{ data: categorieOverlapAggiornate },
 		] = await Promise.all([
-			useFetch<Categoria[]>("/api/categorie"),
+			useFetch<CategoriaWithRelations[]>("/api/categorie"),
 			useFetch<{
 				details: CategorieSovrapposte[]
 				overlappingIds: number[]
@@ -706,7 +720,7 @@ const onDrop = async (targetCategoria: Categoria) => {
 
 		// Ricarica tutti i dati necessari
 		const [{ data: categorieAggiornate }] = await Promise.all([
-			useFetch<Categoria[]>("/api/categorie"),
+			useFetch<CategoriaWithRelations[]>("/api/categorie"),
 		])
 
 		// Aggiorna tutti i riferimenti
@@ -762,9 +776,9 @@ const hasOverlap = (id_categoria?: number) => {
 }
 
 const refreshCategorie = async () => {
-	const { data: categorieAggiornate } = await useFetch<Categoria[]>(
-		"/api/categorie"
-	)
+	const { data: categorieAggiornate } = await useFetch<
+		CategoriaWithRelations[]
+	>("/api/categorie")
 	categorie.value = categorieAggiornate.value
 
 	// Aggiorna anche i dati delle sovrapposizioni

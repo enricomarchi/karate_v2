@@ -13,12 +13,21 @@
 				}}
 			</h2>
 			<form @submit.prevent="handleSave" class="flex flex-wrap gap-4">
-				<input
-					v-model="categoria.nome"
-					:disabled="autoNomeEnabled"
-					placeholder="Nome categoria"
-					class="border p-2 rounded w-full"
-				/>
+				<!-- Campo Nome -->
+				<div class="w-full">
+					<label
+						for="nome"
+						class="block text-sm font-medium text-gray-700 mb-1"
+						>Nome Categoria</label
+					>
+					<input
+						id="nome"
+						v-model="categoria.nome"
+						:disabled="autoNomeEnabled"
+						placeholder="Nome categoria"
+						class="border p-2 rounded w-full"
+					/>
+				</div>
 				<div class="mb-4">
 					<label class="block mb-2">
 						<input
@@ -81,51 +90,97 @@
 						</label>
 					</div>
 				</div>
-				<select
-					:value="categoria.disciplina?.id_disciplina"
-					@input="updateDisciplina"
-					class="border p-2 rounded w-full"
-				>
-					<option disabled value="" class="placeholder-option">
-						Seleziona Disciplina
-					</option>
-					<option
-						v-for="disciplina in discipline"
-						:key="disciplina.id_disciplina"
-						:value="disciplina.id_disciplina"
-					>
-						{{ disciplina.valore }}
-					</option>
-				</select>
-				<select
-					v-model="categoria.sesso"
-					class="border p-2 rounded w-full"
-				>
-					<option disabled value="" class="placeholder-option">
-						Seleziona Sesso
-					</option>
-					<option
-						v-for="option in sessoOptions"
-						:key="option.value"
-						:value="option.value"
-					>
-						{{ option.label }}
-					</option>
-				</select>
-				<input
-					:value="categoria.peso_min"
-					@input="(e) => updatePesoMin(e)"
-					type="number"
-					placeholder="Peso Minimo"
-					class="border p-2 rounded w-full"
-				/>
-				<input
-					:value="categoria.peso_max"
-					@input="(e) => updatePesoMax(e)"
-					type="number"
-					placeholder="Peso Massimo"
-					class="border p-2 rounded w-full"
-				/>
+				<!-- Campo Disciplina e Sesso nella stessa riga -->
+				<div class="w-full flex gap-4">
+					<div class="w-1/2">
+						<label
+							for="disciplina"
+							class="block text-sm font-medium text-gray-700 mb-1"
+							>Disciplina</label
+						>
+						<select
+							id="disciplina"
+							:value="categoria.disciplina?.id_disciplina"
+							@input="updateDisciplina"
+							class="border p-2 rounded w-full"
+						>
+							<option
+								disabled
+								value=""
+								class="placeholder-option"
+							>
+								Seleziona Disciplina
+							</option>
+							<option
+								v-for="disciplina in discipline"
+								:key="disciplina.id_disciplina"
+								:value="disciplina.id_disciplina"
+							>
+								{{ disciplina.valore }}
+							</option>
+						</select>
+					</div>
+					<div class="w-1/2">
+						<label
+							for="sesso"
+							class="block text-sm font-medium text-gray-700 mb-1"
+							>Sesso</label
+						>
+						<select
+							id="sesso"
+							v-model="categoria.sesso"
+							class="border p-2 rounded w-full"
+						>
+							<option
+								disabled
+								value=""
+								class="placeholder-option"
+							>
+								Seleziona Sesso
+							</option>
+							<option
+								v-for="option in sessoOptions"
+								:key="option.value"
+								:value="option.value"
+							>
+								{{ option.label }}
+							</option>
+						</select>
+					</div>
+				</div>
+				<!-- Campi Peso Min e Max nella stessa riga -->
+				<div class="w-full flex gap-4">
+					<div class="w-1/2">
+						<label
+							for="peso_min"
+							class="block text-sm font-medium text-gray-700 mb-1"
+							>Peso Minimo (kg)</label
+						>
+						<input
+							id="peso_min"
+							:value="categoria.peso_min"
+							@input="(e) => updatePesoMin(e)"
+							type="number"
+							placeholder="Peso minimo"
+							class="border p-2 rounded w-full"
+						/>
+					</div>
+					<div class="w-1/2">
+						<label
+							for="peso_max"
+							class="block text-sm font-medium text-gray-700 mb-1"
+							>Peso Massimo (kg)</label
+						>
+						<input
+							id="peso_max"
+							:value="categoria.peso_max"
+							@input="(e) => updatePesoMax(e)"
+							type="number"
+							placeholder="Peso massimo"
+							class="border p-2 rounded w-full"
+						/>
+					</div>
+				</div>
 				<!-- Selettore delle fasce -->
 				<div class="w-full flex">
 					<!-- Listbox delle fasce disponibili -->
@@ -253,25 +308,33 @@
 
 <script setup lang="ts">
 import { ref, watch, onMounted } from "vue"
-import type { PropType } from "vue" // Modifica qui: importazione type-only di PropType
+import type { PropType } from "vue"
 import { useFetch } from "nuxt/app"
-import {
-	type Categoria,
-	type Disciplina,
-	type Fascia,
-	type Cintura,
-	type SessoOption, // Aggiungi l'importazione del tipo
-	getSessoOptions,
-} from "~/types/global"
+import type {
+	Categoria,
+	Disciplina,
+	FasciaEta, // Usa FasciaEta invece di Fascia
+	Cintura,
+	categorie_sesso,
+	Prisma, // Add this import for Decimal
+} from "@prisma/client"
+import { type SessoOption, type CategoriaWithRelations } from "~/types/global"
+import { Decimal } from "@prisma/client/runtime/library"
+
+// Add the emit definition with proper typing
+const emit = defineEmits<{
+	(e: "close"): void
+	(e: "save", categoria: CategoriaWithRelations): void
+}>()
 
 const props = defineProps({
 	categoria: {
-		type: Object as PropType<Categoria>,
+		type: Object as PropType<Partial<CategoriaWithRelations>>,
 		required: true,
 		default: () => ({
 			nome: "",
-			disciplina: undefined, // Modifica qui: rimuovi id_disciplina e usa disciplina
-			sesso: undefined,
+			disciplina: undefined,
+			sesso: undefined as categorie_sesso | undefined,
 			peso_min: null,
 			peso_max: null,
 			n_ordine: null,
@@ -285,10 +348,10 @@ const props = defineProps({
 	},
 	sessoOptions: {
 		type: Array as PropType<SessoOption[]>,
-		default: () => getSessoOptions(),
+		required: true,
 	},
 	fasceEta: {
-		type: Array as PropType<Fascia[]>,
+		type: Array as PropType<FasciaEta[]>,
 		required: true,
 	},
 	cinture: {
@@ -297,33 +360,56 @@ const props = defineProps({
 	},
 })
 
-const emit = defineEmits(["close", "save"])
+// Update interfaces to match Prisma types
+interface WithFasciaFields {
+	id_fascia: number
+	descrizione: string
+	anno_nascita_min: number
+	anno_nascita_max: number
+}
 
-// Tipizza i ref degli array
-const fasceDisponibili = ref<Fascia[]>([])
-const fasceSelezionate = ref<Fascia[]>([])
+// Update the interface to use Prisma.Decimal
+interface WithCinturaFields {
+	id_cintura: number
+	colore: string
+	kyu: Prisma.Decimal | null
+}
+
+// Refs for form data
+const fasceDisponibili = ref<FasciaEta[]>([])
+const fasceSelezionate = ref<FasciaEta[]>([])
 const tempFasceDisponibili = ref<number[]>([])
 const tempFasceSelezionate = ref<number[]>([])
 
-const cintureDisponibili = ref<WithId[]>([])
-const cintureSelezionate = ref<WithId[]>([])
+const cintureDisponibili = ref<Cintura[]>([])
+const cintureSelezionate = ref<Cintura[]>([])
 const tempCintureDisponibili = ref<number[]>([])
 const tempCintureSelezionate = ref<number[]>([])
 
-// Tipizza la funzione sortById
-interface WithId {
-	[key: string]: unknown
-	id_fascia?: number
-	id_cintura?: number
+const autoNomeEnabled = ref(false)
+const nomeFields = ref({
+	disciplina: true,
+	sesso: true,
+	peso: true,
+	fasce: true,
+	cinture: true,
+})
+
+// Type guards
+const isFasciaWithId = (
+	fascia: any
+): fascia is FasciaEta & { id_fascia: number } => {
+	return typeof fascia?.id_fascia === "number"
 }
 
-interface SortableItem extends WithId {
-	id_fascia?: number
-	id_cintura?: number
+const isCinturaWithId = (
+	cintura: any
+): cintura is Cintura & { id_cintura: number } => {
+	return typeof cintura?.id_cintura === "number"
 }
 
-// Sostituisci la funzione sortById con una versione type-safe
-const sortById = <T extends SortableItem>(
+// Helper functions
+const sortById = <T extends WithFasciaFields | WithCinturaFields>(
 	a: T,
 	b: T,
 	idField: keyof T
@@ -334,19 +420,6 @@ const sortById = <T extends SortableItem>(
 		return valueA - valueB
 	}
 	return 0
-}
-
-// Type guards migliorati per gestire gli ID
-const isFasciaWithId = (
-	fascia: Fascia
-): fascia is Required<Pick<Fascia, "id_fascia">> & Fascia => {
-	return typeof fascia.id_fascia === "number"
-}
-
-const isCinturaWithId = (
-	cintura: Cintura
-): cintura is Required<Pick<Cintura, "id_cintura">> & Cintura => {
-	return typeof cintura.id_cintura === "number"
 }
 
 // Helper function per il confronto degli ID
@@ -363,12 +436,12 @@ const hasSameId = <T extends { id_fascia?: number } | { id_cintura?: number }>(
 	return false
 }
 
-// Aggiorna la funzione filterFasce per usare il tipo Fascia
-const filterFasce = (fasce: Fascia[], ids: number[]): Fascia[] => {
+// Aggiorna la funzione filterFasce per usare il tipo FasciaEta
+const filterFasce = (fasce: FasciaEta[], ids: number[]): FasciaEta[] => {
 	return fasce.filter((f) => isFasciaWithId(f) && ids.includes(f.id_fascia))
 }
 
-const filterCinture = (cinture: WithId[], ids: number[]): WithId[] => {
+const filterCinture = (cinture: Cintura[], ids: number[]): Cintura[] => {
 	return cinture.filter(
 		(c) => isCinturaWithId(c) && ids.includes(c.id_cintura!)
 	)
@@ -381,19 +454,18 @@ const hasItems = <T>(arr: T[] | undefined): arr is T[] => {
 
 onMounted(async () => {
 	// Recupera le fasce dal backend
-	const { data: fascheData } = await useFetch<Fascia[]>("/api/fasce")
-	if (fascheData.value) {
-		fasceDisponibili.value = fascheData.value
+	const { data: fasceData } = await useFetch<FasciaEta[]>("/api/fasce")
+	if (fasceData.value) {
+		fasceDisponibili.value = fasceData.value
 		fasceDisponibili.value.sort((a, b) => {
 			return (a.id_fascia || 0) - (b.id_fascia || 0)
 		})
 	}
 
-	cintureDisponibili.value = [...props.cinture].map((c) => ({
-		...c,
-		id_cintura: c.id_cintura,
-	})) as WithId[]
-	cintureDisponibili.value.sort((a, b) => sortById(a, b, "id_cintura"))
+	cintureDisponibili.value = [...props.cinture]
+	cintureDisponibili.value.sort(
+		(a, b) => (a.id_cintura || 0) - (b.id_cintura || 0)
+	)
 
 	// Inizializza categoria.id_disciplina se non è già definito
 	if (!props.categoria.disciplina) {
@@ -429,7 +501,7 @@ onMounted(async () => {
 			.filter(
 				(c) => isCinturaWithId(c) && !cintureIds.includes(c.id_cintura)
 			)
-			.map((c) => ({ ...c, id_cintura: c.id_cintura })) as WithId[]
+			.map((c) => ({ ...c, id_cintura: c.id_cintura })) as Cintura[]
 	}
 
 	// Inizializza la disciplina se non è già definita
@@ -480,7 +552,7 @@ watch(
 								fascia.id_fascia === f.id_fascia
 						)
 				)
-				.map((f) => ({ ...f, id_fascia: f.id_fascia })) as WithId[]
+				.map((f) => ({ ...f, id_fascia: f.id_fascia })) as FasciaEta[]
 			fasceDisponibili.value = props.fasceEta
 				.filter(
 					(f) =>
@@ -491,7 +563,7 @@ watch(
 								fascia.id_fascia === f.id_fascia
 						)
 				)
-				.map((f) => ({ ...f, id_fascia: f.id_fascia })) as WithId[]
+				.map((f) => ({ ...f, id_fascia: f.id_fascia })) as FasciaEta[]
 		}
 
 		if (hasItems(cinture)) {
@@ -505,7 +577,7 @@ watch(
 								cintura.id_cintura === c.id_cintura
 						)
 				)
-				.map((c) => ({ ...c, id_cintura: c.id_cintura })) as WithId[]
+				.map((c) => ({ ...c, id_cintura: c.id_cintura })) as Cintura[]
 			cintureDisponibili.value = props.cinture
 				.filter(
 					(c) =>
@@ -516,7 +588,7 @@ watch(
 								cintura.id_cintura === c.id_cintura
 						)
 				)
-				.map((c) => ({ ...c, id_cintura: c.id_cintura })) as WithId[]
+				.map((c) => ({ ...c, id_cintura: c.id_cintura })) as Cintura[]
 		}
 	},
 	{ deep: true }
@@ -579,15 +651,6 @@ const generaNomeCategoria = () => {
 const close = () => {
 	emit("close")
 }
-
-const autoNomeEnabled = ref(false)
-const nomeFields = ref({
-	disciplina: true,
-	sesso: true,
-	peso: true,
-	fasce: true,
-	cinture: true,
-})
 
 // Osserva i cambiamenti dei campi rilevanti per aggiornare il nome
 watch(
@@ -707,47 +770,28 @@ const rimuoviCinture = () => {
 
 const handleSave = async () => {
 	try {
-		const fasceIds = fasceSelezionate.value
-			.filter(isFasciaWithId)
-			.map((f) => f.id_fascia)
-
-		const cintureIds = cintureSelezionate.value
-			.map((c) => getValidId(c))
-			.filter((id): id is number => id !== null)
-
-		// Prepara i dati della categoria per il salvataggio
-		const disciplina = props.categoria.disciplina
-			? {
-					id_disciplina: props.categoria.disciplina.id_disciplina,
-					valore: props.discipline.find(
-						(d) =>
-							d.id_disciplina ===
-							props.categoria.disciplina?.id_disciplina
-					)?.valore,
-			  }
-			: undefined
-
 		const categoriaToSave = {
 			...props.categoria,
-			disciplina,
-			fasce: fasceIds,
-			cinture: cintureIds,
+			id_disciplina: props.categoria.disciplina?.id_disciplina,
+			fasce: fasceSelezionate.value.map((f) => ({
+				id_fascia: f.id_fascia,
+			})),
+			cinture: cintureSelezionate.value.map((c) => ({
+				id_cintura: c.id_cintura,
+			})),
 		}
 
-		// Determina se è un nuovo inserimento o una modifica
 		const method = props.categoria.id_categoria ? "PUT" : "POST"
 		const query = props.categoria.id_categoria
 			? { id: props.categoria.id_categoria }
 			: undefined
 
-		// Effettua la richiesta al backend
 		const { data } = await useFetch("/api/categorie", {
 			method,
 			query,
 			body: categoriaToSave,
 		})
 
-		// Emetti l'evento save con i dati aggiornati
 		if (data.value) {
 			emit("save", data.value)
 		}
@@ -758,12 +802,14 @@ const handleSave = async () => {
 
 const updatePesoMin = (e: Event) => {
 	const input = e.target as HTMLInputElement
-	props.categoria.peso_min = input.value === "" ? null : Number(input.value)
+	props.categoria.peso_min =
+		input.value === "" ? null : new Decimal(input.value)
 }
 
 const updatePesoMax = (e: Event) => {
 	const input = e.target as HTMLInputElement
-	props.categoria.peso_max = input.value === "" ? null : Number(input.value)
+	props.categoria.peso_max =
+		input.value === "" ? null : new Decimal(input.value)
 }
 
 const generateNome = () => {

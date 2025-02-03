@@ -347,9 +347,18 @@ import type { PropType } from "vue"
 import type {
 	Categoria,
 	Disciplina,
-	Fascia,
+	FasciaEta, // Usa FasciaEta invece di Fascia
 	Cintura,
-	SessoOption,
+	categorie_sesso, // Make sure this is imported
+	Prisma, // Add this import for Decimal
+} from "@prisma/client"
+import { Decimal } from "@prisma/client/runtime/library"
+import {
+	type SessoOption,
+	type CategoriaWithRelations,
+	type CategoriaPreview,
+	type CategoriaFasciaWithRelation,
+	type CategoriaCinturaWithRelation,
 } from "~/types/global"
 
 const props = defineProps({
@@ -362,7 +371,7 @@ const props = defineProps({
 		required: true,
 	},
 	fasceEta: {
-		type: Array as PropType<Fascia[]>,
+		type: Array as PropType<FasciaEta[]>,
 		required: true,
 	},
 	cinture: {
@@ -384,8 +393,8 @@ const sessoSelezionati = ref<SessoOption[]>([])
 const tempSessiDisponibili = ref<string[]>([])
 const tempSessiSelezionati = ref<string[]>([])
 
-const fasceDisponibili = ref<Fascia[]>([])
-const fasceSelezionate = ref<Fascia[]>([])
+const fasceDisponibili = ref<FasciaEta[]>([])
+const fasceSelezionate = ref<FasciaEta[]>([])
 const tempFasceDisponibili = ref<number[]>([])
 const tempFasceSelezionate = ref<number[]>([])
 
@@ -410,8 +419,8 @@ const nomeFields = ref({
 
 // Type guards migliorati
 const isFasciaWithId = (
-	fascia: Fascia
-): fascia is Required<Pick<Fascia, "id_fascia">> & Fascia => {
+	fascia: FasciaEta
+): fascia is Required<Pick<FasciaEta, "id_fascia">> & FasciaEta => {
 	return typeof fascia.id_fascia === "number"
 }
 
@@ -453,16 +462,13 @@ onMounted(() => {
 	)
 })
 
-// Funzione generazione nome migliorata
-const generateNome = (categoria: Partial<Categoria>): string => {
+// Modifica la funzione generateNome per utilizzare il nuovo tipo
+const generateNome = (
+	categoria: Partial<CategoriaWithRelations> | CategoriaPreview
+): string => {
 	const parts: string[] = []
 
-	// Verifica esplicita per disciplina prima di accedere a id_disciplina
-	if (
-		nomeFields.value.disciplina &&
-		categoria.disciplina &&
-		categoria.disciplina.id_disciplina
-	) {
+	if (nomeFields.value.disciplina && categoria.disciplina?.id_disciplina) {
 		const disciplina = props.discipline.find(
 			(d) => d.id_disciplina === categoria.disciplina?.id_disciplina
 		)
@@ -476,20 +482,49 @@ const generateNome = (categoria: Partial<Categoria>): string => {
 		if (sessoOption?.label) parts.push(sessoOption.label)
 	}
 
-	if (nomeFields.value.fasce && categoria.fasce?.length) {
-		const fasceDes = categoria.fasce
-			.map(
-				(id) =>
-					props.fasceEta.find((f) => f.id_fascia === id)?.descrizione
-			)
-			.filter(Boolean)
+	if (nomeFields.value.fasce) {
+		let fasceDes: string[] = []
+		if ("fasce" in categoria && Array.isArray(categoria.fasce)) {
+			if (typeof categoria.fasce[0] === "number") {
+				// Handle CategoriaPreview case
+				fasceDes = (categoria.fasce as number[])
+					.map(
+						(id) =>
+							props.fasceEta.find((f) => f.id_fascia === id)
+								?.descrizione
+					)
+					.filter(Boolean) as string[]
+			} else {
+				// Handle CategoriaWithRelations case
+				fasceDes = (categoria.fasce as CategoriaFasciaWithRelation[])
+					.map((f) => f.fascia.descrizione)
+					.filter(Boolean)
+			}
+		}
 		if (fasceDes.length) parts.push(fasceDes.join("/"))
 	}
 
-	if (nomeFields.value.cinture && categoria.cinture?.length) {
-		const cintureCol = categoria.cinture
-			.map((id) => props.cinture.find((c) => c.id_cintura === id)?.colore)
-			.filter(Boolean)
+	if (nomeFields.value.cinture) {
+		let cintureCol: string[] = []
+		if ("cinture" in categoria && Array.isArray(categoria.cinture)) {
+			if (typeof categoria.cinture[0] === "number") {
+				// Handle CategoriaPreview case
+				cintureCol = (categoria.cinture as number[])
+					.map(
+						(id) =>
+							props.cinture.find((c) => c.id_cintura === id)
+								?.colore
+					)
+					.filter(Boolean) as string[]
+			} else {
+				// Handle CategoriaWithRelations case
+				cintureCol = (
+					categoria.cinture as CategoriaCinturaWithRelation[]
+				)
+					.map((c) => c.cintura.colore)
+					.filter(Boolean)
+			}
+		}
 		if (cintureCol.length) parts.push(cintureCol.join("-"))
 	}
 
@@ -668,34 +703,65 @@ const handleSave = async () => {
 		}
 
 		const combinations = createCombinations(arrays)
-		const categoriesToCreate: Categoria[] = combinations.map(
-			(combination) => {
-				const [disciplina, sesso, fascia, cintura] = combination
-				const newCategoria: Categoria = {
-					nome: "",
-					id_disciplina: disciplina?.id_disciplina,
-					sesso: sesso?.value,
-					peso_min: null,
-					peso_max: null,
-					n_ordine: null,
-					fasce: distintaPerFascia.value
-						? [fascia?.id_fascia].filter(Boolean)
-						: fasceSelezionate.value
-								.map((f) => f.id_fascia)
-								.filter(Boolean),
-					cinture: distintaPerCintura.value
-						? [cintura?.id_cintura].filter(Boolean)
-						: cintureSelezionate.value
-								.map((c) => c.id_cintura)
-								.filter(Boolean),
-				}
+		const categoriesToCreate = combinations.map((combination) => {
+			const [disciplina, sesso, fascia, cintura] = combination
 
-				// Genera il nome per la categoria
-				newCategoria.nome = generateNome(newCategoria)
-
-				return newCategoria
+			// Define type for relationships
+			type CategoriaFasciaWithRelation = {
+				id_fascia: number
+				id_categoria: number
+				fascia: FasciaEta
 			}
-		)
+
+			type CategoriaCinturaWithRelation = {
+				id_cintura: number
+				id_categoria: number
+				cintura: Cintura
+			}
+
+			// Create the new categoria with proper typing
+			const newCategoria: Partial<CategoriaWithRelations> = {
+				nome: "",
+				id_disciplina: disciplina?.id_disciplina,
+				sesso: sesso?.value as categorie_sesso,
+				peso_min: null,
+				peso_max: null,
+				n_ordine: null,
+				fasce: distintaPerFascia.value
+					? fascia?.id_fascia
+						? ([
+								{
+									id_fascia: fascia.id_fascia,
+									id_categoria: 0, // Will be set by the backend
+									fascia: fascia,
+								},
+						  ] as CategoriaFasciaWithRelation[])
+						: []
+					: (fasceSelezionate.value.map((f) => ({
+							id_fascia: f.id_fascia,
+							id_categoria: 0, // Will be set by the backend
+							fascia: f,
+					  })) as CategoriaFasciaWithRelation[]),
+				cinture: distintaPerCintura.value
+					? cintura?.id_cintura
+						? ([
+								{
+									id_cintura: cintura.id_cintura,
+									id_categoria: 0, // Will be set by the backend
+									cintura: cintura,
+								},
+						  ] as CategoriaCinturaWithRelation[])
+						: []
+					: (cintureSelezionate.value.map((c) => ({
+							id_cintura: c.id_cintura,
+							id_categoria: 0, // Will be set by the backend
+							cintura: c,
+					  })) as CategoriaCinturaWithRelation[]),
+			}
+
+			newCategoria.nome = generateNome(newCategoria)
+			return newCategoria
+		})
 
 		console.log("Categorie da creare:", categoriesToCreate)
 		emit("create", categoriesToCreate)
@@ -744,11 +810,11 @@ const previewCategorie = computed(() => {
 	const combinations = createCombinations(arrays)
 	return combinations.map((combination) => {
 		const [disciplina, sesso, fascia, cintura] = combination
-		const categoria: Partial<Categoria> = {
+		const categoria: CategoriaPreview = {
 			disciplina: disciplina
 				? {
-						id_disciplina: disciplina.id_disciplina || undefined,
-						valore: disciplina.valore || undefined,
+						id_disciplina: disciplina.id_disciplina,
+						valore: disciplina.valore,
 				  }
 				: undefined,
 			sesso: sesso?.value,

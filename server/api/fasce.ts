@@ -1,149 +1,73 @@
-import { getConnection } from "../utils/db"
-import dotenv from "dotenv"
-import {
-	defineEventHandler,
-	getQuery,
-	readBody,
-	assertMethod,
-	createError,
-} from "h3"
-import { type ResultSetHeader } from "mysql2"
-import type { Fascia, FasciaRow, MySQLError } from "~/types/global"
-
-dotenv.config()
+import { defineEventHandler, getQuery, readBody, createError } from "h3"
+import { prisma } from "~/lib/prisma"
 
 export default defineEventHandler(async (event) => {
 	const method = event.node.req.method
-	const query = getQuery(event)
-	let body: Partial<Fascia> = {}
-
-	if (method !== "GET") {
-		body = await readBody<Partial<Fascia>>(event)
-	}
-
-	let connection = await getConnection()
 
 	try {
-		assertMethod(event, ["GET", "POST", "PUT", "DELETE"])
-
+		// GET
 		if (method === "GET") {
+			const query = getQuery(event)
 			const id = query.id ? parseInt(query.id as string) : null
 
 			if (id) {
-				// Recupera una specifica fascia d'età
-				const [rows] = await connection.execute<FasciaRow[]>(
-					"SELECT * FROM fasce_eta WHERE id_fascia = ?",
-					[id]
-				)
-				if (!Array.isArray(rows) || rows.length === 0) {
+				const fascia = await prisma.fasciaEta.findUnique({
+					where: { id_fascia: id },
+				})
+				if (!fascia)
 					throw createError({
 						statusCode: 404,
-						message: "Fascia d'età non trovata",
+						message: "Fascia non trovata",
 					})
-				}
-				return rows[0]
-			} else {
-				// Recupera tutte le fasce d'età
-				const [rows] = await connection.execute<FasciaRow[]>(
-					"SELECT * FROM fasce_eta"
-				)
-				return rows
-			}
-		} else if (method === "POST") {
-			const { descrizione, anno_nascita_min, anno_nascita_max } = body
-			if (!descrizione) {
-				throw createError({
-					statusCode: 400,
-					message: "Descrizione mancante",
-				})
-			}
-			if (anno_nascita_min === undefined || anno_nascita_min === null) {
-				throw createError({
-					statusCode: 400,
-					message: "Anno nascita minimo mancante",
-				})
-			}
-			if (anno_nascita_max === undefined || anno_nascita_max === null) {
-				throw createError({
-					statusCode: 400,
-					message: "Anno nascita massimo mancante",
-				})
+				return fascia
 			}
 
-			const [result] = await connection.execute<ResultSetHeader>(
-				"INSERT INTO fasce_eta (descrizione, anno_nascita_min, anno_nascita_max) VALUES (?, ?, ?)",
-				[descrizione, anno_nascita_min, anno_nascita_max]
-			)
-			return {
-				id_fascia: result.insertId,
-				descrizione,
-				anno_nascita_min,
-				anno_nascita_max,
-			} as Fascia
-		} else if (method === "PUT") {
-			const { id } = query
-			if (!id) {
-				throw createError({
-					statusCode: 400,
-					message: "ID mancante per l'aggiornamento",
-				})
-			}
-
-			const { descrizione, anno_nascita_min, anno_nascita_max } = body
-			if (
-				!descrizione ||
-				anno_nascita_min === undefined ||
-				anno_nascita_max === undefined
-			) {
-				throw createError({
-					statusCode: 400,
-					message:
-						"Parametri mancanti per l'aggiornamento della fascia d'età",
-				})
-			}
-
-			await connection.execute(
-				"UPDATE fasce_eta SET descrizione = ?, anno_nascita_min = ?, anno_nascita_max = ? WHERE id_fascia = ?",
-				[descrizione, anno_nascita_min, anno_nascita_max, id]
-			)
-			return {
-				id_fascia: Number(id),
-				descrizione,
-				anno_nascita_min,
-				anno_nascita_max,
-			} as Fascia
-		} else if (method === "DELETE") {
-			const { id } = query
-			if (!id) {
-				throw createError({
-					statusCode: 400,
-					message: "ID mancante per la cancellazione",
-				})
-			}
-
-			await connection.execute(
-				"DELETE FROM fasce_eta WHERE id_fascia = ?",
-				[id]
-			)
-			return { id_fascia: Number(id) } as Partial<Fascia>
-		}
-	} catch (error) {
-		console.error("Errore nella gestione delle fasce d'età:", error)
-		const mysqlError = error as MySQLError
-		// Gestione specifica per errori di duplicazione
-		if (mysqlError.code === "ER_DUP_ENTRY") {
-			throw createError({
-				statusCode: 400,
-				message: "Fascia d'età già esistente con questi valori",
+			return await prisma.fasciaEta.findMany({
+				include: {
+					categorie: true, // Questo includerà le relazioni con le categorie
+				},
 			})
 		}
-		throw createError({
-			statusCode: mysqlError.statusCode || 500,
-			message: mysqlError.message || "Errore interno del server",
-		})
-	} finally {
-		if (connection) {
-			connection.release()
+
+		// POST
+		if (method === "POST") {
+			const body = await readBody(event)
+			return await prisma.fasciaEta.create({
+				data: {
+					descrizione: body.descrizione,
+					anno_nascita_min: body.anno_nascita_min,
+					anno_nascita_max: body.anno_nascita_max,
+				},
+			})
 		}
+
+		// PUT
+		if (method === "PUT") {
+			const query = getQuery(event)
+			const id = parseInt(query.id as string)
+			const body = await readBody(event)
+
+			return await prisma.fasciaEta.update({
+				where: { id_fascia: id },
+				data: {
+					descrizione: body.descrizione,
+					anno_nascita_min: body.anno_nascita_min,
+					anno_nascita_max: body.anno_nascita_max,
+				},
+			})
+		}
+
+		// DELETE
+		if (method === "DELETE") {
+			const query = getQuery(event)
+			const id = parseInt(query.id as string)
+
+			await prisma.fasciaEta.delete({
+				where: { id_fascia: id },
+			})
+			return { id_fascia: id }
+		}
+	} catch (error) {
+		console.error("Errore nell'operazione:", error)
 	}
 })

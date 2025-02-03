@@ -1,15 +1,14 @@
-import { getConnection } from "../utils/db"
 import { defineEventHandler } from "h3"
+import { prisma } from "~/lib/prisma"
 
-export default defineEventHandler(async (event) => {
-	const conn = await getConnection()
+export default defineEventHandler(async () => {
 	try {
-		const [rows] = await conn.query("SELECT * FROM discipline")
-		return rows
+		return await prisma.disciplina.findMany({
+			orderBy: {
+				valore: "asc",
+			},
+		})
 	} catch (error) {
 		console.error("Errore nel recupero delle discipline:", error)
-		throw error
-	} finally {
-		conn.release()
 	}
 })

@@ -20,8 +20,22 @@ export default defineNuxtConfig({
 		externals: {
 			inline: ["xlsx"],
 		},
+		esbuild: {
+			options: {
+				tsconfigRaw: {
+					compilerOptions: {
+						experimentalDecorators: true,
+					},
+				},
+			},
+		},
 	},
 	build: {
 		transpile: ["xlsx"],
+	},
+	runtimeConfig: {
+		prisma: {
+			clientUrl: process.env.DATABASE_URL,
+		},
 	},
 })

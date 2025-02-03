@@ -404,21 +404,28 @@ LEFT JOIN cinture c ON a.cintura_id = c.id_cintura
 LEFT JOIN societa s ON a.id_societa = s.id_societa;
 
 -- Vista per trovare le categorie appropriate per un atleta
-CREATE OR REPLACE VIEW categoria_per_atleta AS
+CREATE OR REPLACE VIEW categoria_per_iscrizione AS
 SELECT DISTINCT
     c.id_categoria,
     c.nome,
     c.id_disciplina,
     c.sesso,
-    a.id_atleta,
-    d.valore as disciplina_nome
-FROM atleti a
+    i.id_iscrizione,
+    i.id_atleta,
+    d.valore as disciplina_nome,
+    a.sesso as sesso_atleta,
+    a.anno_nascita,
+    a.cintura_id,
+    a.peso_kg
+FROM iscrizioni i
+JOIN atleti a ON i.id_atleta = a.id_atleta
 CROSS JOIN categorie c
 JOIN discipline d ON c.id_disciplina = d.id_disciplina
 JOIN categorie_cinture cc ON c.id_categoria = cc.id_categoria
 JOIN categorie_fasce cf ON c.id_categoria = cf.id_categoria
 JOIN fasce_eta fe ON cf.id_fascia = fe.id_fascia
 WHERE cc.id_cintura = a.cintura_id
+    AND i.id_disciplina = c.id_disciplina
     AND a.anno_nascita BETWEEN fe.anno_nascita_min AND fe.anno_nascita_max
     AND (c.sesso = a.sesso OR c.sesso = 'X')
     AND (
@@ -438,4 +445,38 @@ SELECT
     pagato,
     resto_consegnato
 FROM societa;
+
+CREATE OR REPLACE VIEW dettaglio_iscrizioni AS
+SELECT 
+    i.id_iscrizione,
+    i.id_atleta,
+    i.id_categoria,
+    i.id_tabellone,
+    i.data_iscrizione,
+    i.manuale,
+    i.confermata,
+    i.ammesso_in_finale,
+    i.classifica,
+    i.id_disciplina,  -- prendiamo questo da iscrizioni
+    da.cognome,
+    da.nome,
+    da.sesso,
+    da.anno_nascita,
+    da.cintura_id,
+    da.dan,
+    da.peso_kg,
+    da.id_societa,
+    da.cintura,
+    da.kyu,
+    da.nome_societa,
+    dc.nome AS nome_categoria,
+    dc.peso_min,
+    dc.peso_max,
+    dc.n_ordine,
+    dc.disciplina_valore,
+    t.codice_tabellone
+FROM iscrizioni i
+LEFT JOIN dettaglio_atleti da ON i.id_atleta = da.id_atleta
+LEFT JOIN dettaglio_categorie dc ON i.id_categoria = dc.id_categoria
+LEFT JOIN tabelloni t ON i.id_tabellone = t.id_tabellone;
 

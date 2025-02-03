@@ -77,10 +77,6 @@
 </template>
 
 <script setup>
-import { useErrorStore } from "~/stores/error"
-
-const errorStore = useErrorStore()
-
 const handleImport = async () => {
 	errorStore.clearErrors() // Reset errori prima di una nuova importazione
 

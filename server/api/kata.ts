@@ -1,19 +1,12 @@
 import { defineEventHandler } from "h3"
-import { getConnection } from "../utils/db"
-import type { KataRow } from "~/types/global"
+import { prisma } from "~/lib/prisma"
 
-export default defineEventHandler(async (event) => {
-	const connection = await getConnection()
-
+export default defineEventHandler(async () => {
 	try {
-		const [rows] = await connection.execute<KataRow[]>(
-			"SELECT * FROM kata_shotokan ORDER BY livello, nome"
-		)
-		return rows
+		return await prisma.kata_shotokan.findMany({
+			orderBy: [{ livello: "asc" }, { nome: "asc" }],
+		})
 	} catch (error) {
 		console.error("Errore nel recupero dei kata:", error)
-		throw error
-	} finally {
-		connection.release()
 	}
 })

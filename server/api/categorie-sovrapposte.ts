@@ -1,18 +1,23 @@
 import { defineEventHandler } from "h3"
-import { getConnection } from "../utils/db"
-import type { CategorieSovrapposte } from "~/types/global"
+import { prisma } from "~/lib/prisma"
 
-export default defineEventHandler(async (event) => {
-	const connection = await getConnection()
+export default defineEventHandler(async () => {
 	try {
-		const [rows] = await connection.execute<CategorieSovrapposte[]>(
-			"SELECT cat1_id, cat1_nome, cat2_id, cat2_nome, id_disciplina, disciplina FROM categorie_sovrapposte"
-		)
+		// Utilizziamo una query raw con Prisma perché stiamo lavorando con una vista
+		const rows = await prisma.$queryRaw`
+            SELECT 
+                cat1_id, 
+                cat1_nome, 
+                cat2_id, 
+                cat2_nome, 
+                id_disciplina, 
+                disciplina 
+            FROM categorie_sovrapposte
+        `
 
 		return {
 			details: rows,
-			overlappingIds: rows.reduce((acc: number[], row) => {
-				// Verifica che gli ID esistano prima di aggiungerli
+			overlappingIds: (rows as any[]).reduce((acc: number[], row) => {
 				if (row.cat1_id && !acc.includes(row.cat1_id)) {
 					acc.push(row.cat1_id)
 				}
@@ -22,7 +27,8 @@ export default defineEventHandler(async (event) => {
 				return acc
 			}, []),
 		}
-	} finally {
-		connection.release()
+	} catch (error) {
+		console.error("Errore nel recupero delle categorie sovrapposte:", error)
+		throw error
 	}
 })

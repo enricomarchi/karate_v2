@@ -10,5 +10,5 @@
 			"@/*": ["./*"]
 		}
 	},
-	"include": ["**/*.ts", "**/*.tsx", "**/*.vue"]
+	"include": ["**/*.ts", "**/*.tsx", "**/*.vue", "server/api/export.mjs"]
 }

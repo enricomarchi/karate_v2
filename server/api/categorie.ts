@@ -1,353 +1,239 @@
-import { getConnection } from "../utils/db"
-import {
-	defineEventHandler,
-	getQuery,
-	readBody,
-	assertMethod,
-	createError,
-} from "h3"
-import type {
-	Categoria,
-	CategoriaRow,
-	FasciaRow,
-	CinturaRow,
-	MySQLError,
-	Disciplina,
-} from "~/types/global"
-import type { ResultSetHeader, PoolConnection } from "mysql2/promise"
+import { defineEventHandler, getQuery, readBody, createError } from "h3"
+import { prisma } from "~/lib/prisma"
+import { type Prisma } from "@prisma/client"
+
+interface CreateCategoriaBody {
+	nome: string
+	sesso: string
+	disciplina?: { id_disciplina: string }
+	id_disciplina?: string
+	peso_min?: number
+	peso_max?: number
+	n_ordine?: number
+	fasce?: number[]
+	cinture?: number[]
+}
+
+interface UpdateCategoriaBody extends CreateCategoriaBody {}
+
+interface PrismaError {
+	code?: string
+	message?: string
+}
 
 export default defineEventHandler(async (event) => {
 	const method = event.node.req.method
 	const query = getQuery(event)
 
-	// Ottieni la connessione prima del try/catch principale
-	const connection = await getConnection()
-
 	try {
-		assertMethod(event, ["GET", "POST", "PUT", "DELETE"])
-
+		// GET per una categoria specifica o tutte
 		if (method === "GET") {
 			const id = query.id ? parseInt(query.id as string) : null
+			const atletaId = query.atletaId
+				? parseInt(query.atletaId as string)
+				: null
+
+			if (atletaId) {
+				const atleta = await prisma.atleta.findUnique({
+					where: { id_atleta: atletaId },
+					include: { cintura: true },
+				})
+
+				if (!atleta || !atleta.cintura_id) {
+					throw createError({
+						statusCode: 404,
+						message: "Atleta non trovato o senza cintura assegnata",
+					})
+				}
+
+				// Trova categorie compatibili
+				return await prisma.categoria.findMany({
+					where: {
+						OR: [{ sesso: atleta.sesso }, { sesso: "X" }],
+						cinture: { some: { id_cintura: atleta.cintura_id } },
+						fasce: {
+							some: {
+								fascia: {
+									anno_nascita_min: {
+										lte: atleta.anno_nascita,
+									},
+									anno_nascita_max: {
+										gte: atleta.anno_nascita,
+									},
+								},
+							},
+						},
+						AND: [
+							{
+								OR: [
+									{ peso_min: null },
+									{
+										peso_min: atleta.peso_kg
+											? { lte: atleta.peso_kg }
+											: undefined,
+									},
+								],
+							},
+							{
+								OR: [
+									{ peso_max: null },
+									{
+										peso_max: atleta.peso_kg
+											? { gte: atleta.peso_kg }
+											: undefined,
+									},
+								],
+							},
+						],
+					},
+					include: {
+						disciplina: true,
+						fasce: { include: { fascia: true } },
+						cinture: { include: { cintura: true } },
+					},
+				})
+			}
+
 			if (id) {
-				// Recupera i dati completi della categoria dalla view
-				const [rows] = await connection.execute<CategoriaRow[]>(
-					"SELECT * FROM dettaglio_categorie WHERE id_categoria = ?",
-					[id]
-				)
+				const categoria = await prisma.categoria.findUnique({
+					where: { id_categoria: id },
+					include: {
+						disciplina: true,
+						fasce: { include: { fascia: true } },
+						cinture: { include: { cintura: true } },
+					},
+				})
 
-				// Recupera le fasce dalla view
-				const [fasce] = await connection.execute<FasciaRow[]>(
-					"SELECT * FROM dettaglio_categorie_fasce WHERE id_categoria = ?",
-					[id]
-				)
-
-				// Recupera le cinture dalla view
-				const [cinture] = await connection.execute<CinturaRow[]>(
-					"SELECT * FROM dettaglio_categorie_cinture WHERE id_categoria = ?",
-					[id]
-				)
-
-				if (rows.length === 0) {
+				if (!categoria) {
 					throw createError({
 						statusCode: 404,
 						message: "Categoria non trovata",
 					})
 				}
 
-				// Trasforma i dati dal database nel formato dell'interfaccia Categoria
-				const categoriaWithDisciplina = {
-					...rows[0],
-					disciplina:
-						rows[0].disciplina_id && rows[0].disciplina_valore
-							? {
-									id_disciplina: rows[0].disciplina_id,
-									valore: rows[0].disciplina_valore,
-							  }
-							: undefined,
-					fasce,
-					cinture,
-				}
-
-				// Rimuovi i campi extra che non fanno parte dell'interfaccia Categoria
-				const { disciplina_id, disciplina_valore, ...result } =
-					categoriaWithDisciplina
-
-				return result
-			} else {
-				const [rows] = await connection.execute<CategoriaRow[]>(
-					"SELECT * FROM dettaglio_categorie"
-				)
-				// Per ogni categoria, carica le sue fasce e cinture
-				const categorie = await Promise.all(
-					rows.map(async (cat) => {
-						const [fasce] = await connection.execute<FasciaRow[]>(
-							"SELECT * FROM dettaglio_categorie_fasce WHERE id_categoria = ?",
-							[cat.id_categoria]
-						)
-						const [cinture] = await connection.execute<
-							CinturaRow[]
-						>(
-							"SELECT * FROM dettaglio_categorie_cinture WHERE id_categoria = ?",
-							[cat.id_categoria]
-						)
-						return {
-							...cat,
-							fasce: fasce,
-							cinture: cinture,
-						}
-					})
-				)
-				return categorie
-			}
-		} else if (method === "POST") {
-			const categoriaInput = await readBody<Categoria>(event)
-			// Estrai solo l'id dalla disciplina se presente, altrimenti usa id_disciplina direttamente
-			const id_disciplina =
-				categoriaInput.disciplina?.id_disciplina ||
-				categoriaInput.id_disciplina
-			const { fasce, cinture } = categoriaInput
-
-			// Start transaction
-			await connection.beginTransaction()
-
-			try {
-				// Se n_ordine non è specificato, trova il massimo disponibile e aggiunge 1
-				if (!categoriaInput.n_ordine) {
-					const [rows] = await connection.execute<CategoriaRow[]>(
-						"SELECT MAX(n_ordine) as max_order FROM categorie WHERE n_ordine IS NOT NULL"
-					)
-					const maxOrder = rows[0]?.max_order
-					categoriaInput.n_ordine = maxOrder ? maxOrder + 1 : 1
-				}
-
-				// Insert main category data
-				const [result] = await connection.execute<ResultSetHeader>(
-					"INSERT INTO categorie (nome, id_disciplina, sesso, peso_min, peso_max, n_ordine) VALUES (?, ?, ?, ?, ?, ?)",
-					[
-						categoriaInput.nome || null,
-						id_disciplina || null,
-						categoriaInput.sesso || null,
-						categoriaInput.peso_min ?? null, // Ensure null is used instead of undefined
-						categoriaInput.peso_max ?? null, // Ensure null is used instead of undefined
-						categoriaInput.n_ordine,
-					]
-				)
-
-				const id_categoria = result.insertId
-
-				// Insert fasce relationships if provided
-				if (Array.isArray(fasce) && fasce.length > 0) {
-					const fasceValues = fasce.map((id_fascia) => [
-						id_categoria,
-						id_fascia,
-					])
-					await connection.query(
-						"INSERT INTO categorie_fasce (id_categoria, id_fascia) VALUES ?",
-						[fasceValues]
-					)
-				}
-
-				// Insert cinture relationships if provided
-				if (Array.isArray(cinture) && cinture.length > 0) {
-					const cintureValues = cinture.map((id_cintura) => [
-						id_categoria,
-						id_cintura,
-					])
-					await connection.query(
-						"INSERT INTO categorie_cinture (id_categoria, id_cintura) VALUES ?",
-						[cintureValues]
-					)
-				}
-
-				// Commit transaction
-				await connection.commit()
-
-				// Dopo il commit, recupera i dati completi usando le view
-				const [categoriaRows] = await connection.execute<
-					CategoriaRow[]
-				>("SELECT * FROM dettaglio_categorie WHERE id_categoria = ?", [
-					id_categoria,
-				])
-				const [fasceRows] = await connection.execute<FasciaRow[]>(
-					"SELECT * FROM dettaglio_categorie_fasce WHERE id_categoria = ?",
-					[id_categoria]
-				)
-				const [cintureRows] = await connection.execute<CinturaRow[]>(
-					"SELECT * FROM dettaglio_categorie_cinture WHERE id_categoria = ?",
-					[id_categoria]
-				)
-
-				return {
-					...categoriaRows[0],
-					fasce: fasceRows,
-					cinture: cintureRows,
-				}
-			} catch (error) {
-				// Rollback in case of error
-				await connection.rollback()
-				const mysqlError = error as MySQLError
-				throw createError({
-					statusCode: 500,
-					message: mysqlError.message || "Errore interno del server",
-				})
-			}
-		} else if (method === "PUT") {
-			const id = parseInt(query.id as string)
-			if (!id || isNaN(id)) {
-				throw createError({
-					statusCode: 400,
-					statusMessage: "ID mancante o non valido",
-				})
+				return categoria
 			}
 
-			const updateData = await readBody<Categoria>(event)
-			const { fasce, cinture, disciplina, ...categoriaData } = updateData
-
-			// Start transaction
-			await connection.beginTransaction()
-
-			try {
-				// Update main category data if there are fields to update
-				if (Object.keys(categoriaData).length > 0 || disciplina) {
-					const updateFields: string[] = []
-					const updateValues: (string | number | null)[] = []
-
-					Object.entries(categoriaData).forEach(([key, value]) => {
-						updateFields.push(`${key} = ?`)
-						updateValues.push(value ?? null)
-					})
-
-					if (disciplina?.id_disciplina) {
-						updateFields.push("id_disciplina = ?")
-						updateValues.push(disciplina.id_disciplina)
-					}
-
-					if (updateFields.length > 0) {
-						updateValues.push(id)
-						await connection.execute(
-							`UPDATE categorie SET ${updateFields.join(
-								", "
-							)} WHERE id_categoria = ?`,
-							updateValues
-						)
-					}
-				}
-
-				// Update fasce relationships if provided
-				if (Array.isArray(fasce)) {
-					await connection.execute(
-						"DELETE FROM categorie_fasce WHERE id_categoria = ?",
-						[id]
-					)
-
-					if (fasce.length > 0) {
-						const fasceValues = fasce.map((id_fascia) => [
-							id,
-							id_fascia,
-						])
-						await connection.query(
-							"INSERT INTO categorie_fasce (id_categoria, id_fascia) VALUES ?",
-							[fasceValues]
-						)
-					}
-				}
-
-				// Update cinture relationships if provided
-				if (Array.isArray(cinture)) {
-					await connection.execute(
-						"DELETE FROM categorie_cinture WHERE id_categoria = ?",
-						[id]
-					)
-
-					if (cinture.length > 0) {
-						const cintureValues = cinture.map((id_cintura) => [
-							id,
-							id_cintura,
-						])
-						await connection.query(
-							"INSERT INTO categorie_cinture (id_categoria, id_cintura) VALUES ?",
-							[cintureValues]
-						)
-					}
-				}
-
-				// Commit transaction
-				await connection.commit()
-
-				// Dopo il commit, recupera i dati completi usando le view
-				const [categoriaRows] = await connection.execute<
-					CategoriaRow[]
-				>("SELECT * FROM dettaglio_categorie WHERE id_categoria = ?", [
-					id,
-				])
-				const [fasceRows] = await connection.execute<FasciaRow[]>(
-					"SELECT * FROM dettaglio_categorie_fasce WHERE id_categoria = ?",
-					[id]
-				)
-				const [cintureRows] = await connection.execute<CinturaRow[]>(
-					"SELECT * FROM dettaglio_categorie_cinture WHERE id_categoria = ?",
-					[id]
-				)
-
-				return {
-					...categoriaRows[0],
-					fasce: fasceRows,
-					cinture: cintureRows,
-				}
-			} catch (error) {
-				// Rollback in case of error
-				await connection.rollback()
-				const mysqlError = error as MySQLError
-				throw createError({
-					statusCode: 500,
-					message: mysqlError.message || "Errore interno del server",
-				})
-			}
-		} else if (method === "DELETE") {
-			const id = parseInt(query.id as string)
-			if (!id || isNaN(id)) {
-				throw new Error("ID categoria mancante o non valido")
-			}
-
-			// Eliminazione delle relazioni
-			await connection.beginTransaction()
-
-			try {
-				await connection.execute(
-					"DELETE FROM categorie_fasce WHERE id_categoria = ?",
-					[id]
-				)
-				await connection.execute(
-					"DELETE FROM categorie_cinture WHERE id_categoria = ?",
-					[id]
-				)
-				await connection.execute(
-					"DELETE FROM categorie WHERE id_categoria = ?",
-					[id]
-				)
-
-				await connection.commit()
-				return { id_categoria: id }
-			} catch (error) {
-				await connection.rollback()
-				const mysqlError = error as MySQLError
-				throw error
-			}
-		}
-	} catch (error) {
-		console.error("Errore nella gestione delle categorie:", error)
-		const mysqlError = error as MySQLError
-		if (mysqlError.code === "ER_DUP_ENTRY") {
-			throw createError({
-				statusCode: 400,
-				message: "Categoria già esistente con questi valori",
+			return await prisma.categoria.findMany({
+				include: {
+					disciplina: true,
+					fasce: { include: { fascia: true } },
+					cinture: { include: { cintura: true } },
+				},
 			})
 		}
+
+		// POST
+		if (method === "POST") {
+			const body = await readBody(event)
+
+			const data: Prisma.CategoriaCreateInput = {
+				nome: body.nome,
+				sesso: body.sesso,
+				disciplina: {
+					connect: {
+						id_disciplina:
+							body.disciplina?.id_disciplina ||
+							body.id_disciplina,
+					},
+				},
+				peso_min: body.peso_min || null,
+				peso_max: body.peso_max || null,
+				n_ordine: body.n_ordine || (await getNextOrder()),
+				fasce: {
+					create: body.fasce?.map((id_fascia: number) => ({
+						fascia: { connect: { id_fascia } },
+					})),
+				},
+				cinture: {
+					create: body.cinture?.map((id_cintura: number) => ({
+						cintura: { connect: { id_cintura } },
+					})),
+				},
+			}
+
+			return await prisma.categoria.create({
+				data,
+				include: {
+					disciplina: true,
+					fasce: { include: { fascia: true } },
+					cinture: { include: { cintura: true } },
+				},
+			})
+		}
+
+		// PUT
+		if (method === "PUT") {
+			const id = parseInt(query.id as string)
+			const body = await readBody(event)
+
+			const data: Prisma.CategoriaUpdateInput = {
+				nome: body.nome,
+				sesso: body.sesso,
+				disciplina: body.id_disciplina
+					? {
+							connect: { id_disciplina: body.id_disciplina },
+					  }
+					: undefined,
+				peso_min: body.peso_min ?? null,
+				peso_max: body.peso_max ?? null,
+				n_ordine: body.n_ordine,
+				fasce: body.fasce
+					? {
+							deleteMany: {},
+							create: body.fasce.map((id_fascia: number) => ({
+								fascia: { connect: { id_fascia } },
+							})),
+					  }
+					: undefined,
+				cinture: body.cinture
+					? {
+							deleteMany: {},
+							create: body.cinture.map((id_cintura: number) => ({
+								cintura: { connect: { id_cintura } },
+							})),
+					  }
+					: undefined,
+			}
+
+			return await prisma.categoria.update({
+				where: { id_categoria: id },
+				data,
+				include: {
+					disciplina: true,
+					fasce: { include: { fascia: true } },
+					cinture: { include: { cintura: true } },
+				},
+			})
+		}
+
+		// DELETE
+		if (method === "DELETE") {
+			const id = parseInt(query.id as string)
+			await prisma.categoria.delete({
+				where: { id_categoria: id },
+			})
+			return { id_categoria: id }
+		}
+
 		throw createError({
-			statusCode: 500,
-			message: mysqlError.message || "Errore interno del server",
+			statusCode: 405,
+			message: "Method not allowed",
 		})
-	} finally {
-		connection.release()
+	} catch (error) {
+		console.error("Errore nella gestione delle categorie:", error)
+		throw error instanceof Error
+			? createError({ statusCode: 500, message: error.message })
+			: createError({
+					statusCode: 500,
+					message: "Errore interno del server",
+			  })
 	}
 })
+
+async function getNextOrder() {
+	const maxOrder = await prisma.categoria.aggregate({
+		_max: { n_ordine: true },
+	})
+	return (maxOrder._max.n_ordine || 0) + 1
+}
