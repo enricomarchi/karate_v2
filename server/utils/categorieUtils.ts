@@ -1,41 +1,27 @@
-import type { Pool, PoolConnection } from "mysql2/promise"
-import type {
-	Atleta,
-	Iscrizione,
-	CategoriaRow,
-	IscrizioneRow,
-} from "../../types/global"
+import { PrismaClient, Iscrizione, Atleta } from "@prisma/client"
 
 export const aggiornaCategorie = async (
-	connection: Pool | PoolConnection,
+	prisma: PrismaClient,
 	input: Atleta | Iscrizione
 ) => {
 	try {
-		let iscrizioni: IscrizioneRow[]
 		let id_atleta: number | undefined
 
 		// Determina l'id_atleta in base al tipo di input
 		if ("id_iscrizione" in input) {
 			// Se è un'iscrizione, usa l'id_atleta dall'oggetto atleta
-			id_atleta = input.atleta?.id_atleta
+			id_atleta = input.id_atleta
 			if (!id_atleta) {
 				// Se non troviamo l'id_atleta nell'oggetto atleta, cerchiamolo nel database
-				const [rows] = await connection.execute<IscrizioneRow[]>(
-					"SELECT id_atleta FROM iscrizioni WHERE id_iscrizione = ?",
-					[input.id_iscrizione]
-				)
-				id_atleta = rows[0]?.id_atleta
+				const iscrizione = await prisma.iscrizione.findUnique({
+					where: { id_iscrizione: input.id_iscrizione },
+					select: { id_atleta: true },
+				})
+				id_atleta = iscrizione?.id_atleta
 			}
-			iscrizioni = [{ ...(input as IscrizioneRow) }]
 		} else {
 			// Se è un atleta, usa direttamente il suo id_atleta
-			id_atleta = (input as Atleta).id_atleta
-			// Recupera tutte le iscrizioni per questo atleta
-			const [rows] = await connection.execute<IscrizioneRow[]>(
-				"SELECT * FROM iscrizioni WHERE id_atleta = ?",
-				[id_atleta]
-			)
-			iscrizioni = rows
+			id_atleta = input.id_atleta
 		}
 
 		// Verifica che id_atleta sia definito
@@ -43,33 +29,42 @@ export const aggiornaCategorie = async (
 			throw new Error("id_atleta non trovato nell'input")
 		}
 
+		// Recupera tutte le iscrizioni per questo atleta
+		const iscrizioni = await prisma.iscrizione.findMany({
+			where: { id_atleta },
+		})
+
 		// Per ogni iscrizione, trova la categoria appropriata
 		for (const iscrizione of iscrizioni) {
-			const [categorie] = await connection.execute<CategoriaRow[]>(
-				`SELECT * FROM categoria_per_iscrizione 
-                 WHERE id_atleta = ? AND id_disciplina = ?`,
-				[id_atleta, iscrizione.id_disciplina]
-			)
+			const categorie = await prisma.$queryRaw<
+				Array<{ id_categoria: number }>
+			>`
+				SELECT id_categoria 
+				FROM categoria_per_iscrizione 
+				WHERE id_atleta = ${id_atleta} 
+				AND id_disciplina = ${iscrizione.id_disciplina}
+			`
 
-			// ...resto del codice invariato...
 			if (categorie.length > 0) {
 				const nuovaCategoria = categorie[0]
 
 				if (nuovaCategoria.id_categoria !== iscrizione.id_categoria) {
-					await connection.execute(
-						`UPDATE iscrizioni 
-                         SET id_categoria = ?, 
-                             manuale = true,
-                             confermata = true
-                         WHERE id_iscrizione = ?`,
-						[nuovaCategoria.id_categoria, iscrizione.id_iscrizione]
-					)
+					// Aggiorna l'iscrizione con la nuova categoria
+					await prisma.iscrizione.update({
+						where: { id_iscrizione: iscrizione.id_iscrizione },
+						data: {
+							id_categoria: nuovaCategoria.id_categoria,
+							manuale: true,
+							confermata: true,
+						},
+					})
 
+					// Se l'iscrizione ha un tabellone, marca il tabellone come non stampato
 					if (iscrizione.id_tabellone) {
-						await connection.execute(
-							"UPDATE tabelloni SET stampato = false WHERE id_tabellone = ?",
-							[iscrizione.id_tabellone]
-						)
+						await prisma.tabelloni.update({
+							where: { id_tabellone: iscrizione.id_tabellone },
+							data: { stampato: false },
+						})
 					}
 				}
 			}

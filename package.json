@@ -7,7 +7,10 @@
 		"dev": "nuxt dev",
 		"generate": "nuxt generate",
 		"preview": "nuxt preview",
-		"postinstall": "nuxt prepare"
+		"postinstall": "nuxt prepare",
+		"test": "vitest",
+		"test:coverage": "vitest run --coverage",
+		"test:ui": "vitest --ui"
 	},
 	"dependencies": {
 		"@fortawesome/fontawesome-free": "^6.7.0",
@@ -32,9 +35,16 @@
 	},
 	"devDependencies": {
 		"@nuxt/types": "^2.18.1",
+		"@testing-library/vue": "^8.1.0",
 		"@types/node": "^22.13.0",
+		"@vitest/coverage-v8": "^1.2.0",
+		"@vue/test-utils": "^2.4.6",
+		"cross-env": "^7.0.3",
+		"jsdom": "^23.2.0",
+		"msw": "^2.7.0",
 		"sass": "^1.83.1",
 		"sass-loader": "^16.0.4",
-		"typescript": "^5.7.3"
+		"typescript": "^5.7.3",
+		"vitest": "^1.6.1"
 	}
 }

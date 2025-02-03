@@ -5,7 +5,8 @@ import type {
 	Cintura,
 	CategoriaFascia,
 	CategoriaCintura,
-	categorie_sesso, // Add this import
+	categorie_sesso,
+	Prisma,
 } from "@prisma/client"
 import { Decimal } from "@prisma/client/runtime/library"
 
@@ -89,4 +90,47 @@ export interface CategorieSovrapposte {
 	cat2_nome: string
 	id_disciplina: string
 	disciplina: string
+}
+
+// Tipi per i test delle API
+export interface MockEvent {
+	__is_event__: true
+	node: {
+		req: {
+			method: string
+		}
+	}
+	context: {
+		params?: Record<string, string>
+	}
+	method: string
+	path: string
+	headers: Headers
+	handled: boolean
+	body?: unknown
+	_handled: boolean
+	_onBeforeResponseCalled: boolean
+	_onAfterResponseCalled: boolean
+	handle: () => Promise<void>
+	handleError: (error: Error) => Promise<void>
+	getQuery: () => Record<string, string>
+	getParams: () => Record<string, string>
+}
+
+export interface MockResponse<T> {
+	data: { value: T | null }
+	error: { value: Error | null }
+}
+
+// Tipi per le fasce d'età
+export interface FasciaEtaForm
+	extends Omit<Prisma.FasciaEtaCreateInput, "id_fascia"> {
+	id_fascia?: number
+}
+
+export interface FasciaEtaTest {
+	id_fascia: number
+	descrizione: string
+	anno_nascita_min: number
+	anno_nascita_max: number
 }

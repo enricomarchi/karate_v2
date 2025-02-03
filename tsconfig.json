@@ -4,7 +4,7 @@
 		"strict": true,
 		"skipLibCheck": true,
 		"noImplicitAny": false,
-		"types": ["node", "nuxt", "@nuxt/types"],
+		"types": ["vitest/globals", "node"],
 		"paths": {
 			"~/*": ["./*"],
 			"@/*": ["./*"]

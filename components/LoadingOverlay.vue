@@ -1,38 +1,22 @@
 <template>
 	<div
 		v-if="show"
-		class="fixed inset-0 bg-black bg-opacity-50 z-[9999] flex items-center justify-center"
+		class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center"
 	>
-		<div class="flex flex-col items-center bg-white p-4 rounded-lg">
-			<div class="loader"></div>
-			<div class="mt-2 text-gray-700">{{ message }}</div>
+		<div
+			class="bg-white p-4 rounded-lg shadow-lg flex flex-col items-center"
+		>
+			<div
+				class="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent"
+			></div>
+			<p class="mt-4 text-gray-700">{{ message || "Caricamento..." }}</p>
 		</div>
 	</div>
 </template>
 
-<script setup>
-defineProps({
-	show: Boolean,
-	message: String,
-})
+<script setup lang="ts">
+defineProps<{
+	show: boolean
+	message?: string
+}>()
 </script>
-
-<style scoped>
-.loader {
-	border: 4px solid #f3f3f3;
-	border-radius: 50%;
-	border-top: 4px solid #3498db;
-	width: 40px;
-	height: 40px;
-	animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-	0% {
-		transform: rotate(0deg);
-	}
-	100% {
-		transform: rotate(360deg);
-	}
-}
-</style>

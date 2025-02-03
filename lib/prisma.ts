@@ -1,14 +1,15 @@
 import { PrismaClient } from "@prisma/client"
 
-let prisma: PrismaClient
-
-if (process.env.NODE_ENV === "production") {
-	prisma = new PrismaClient()
-} else {
-	if (!(global as any).prisma) {
-		;(global as any).prisma = new PrismaClient() // Rimosso l'oggetto log
-	}
-	prisma = (global as any).prisma
+const prismaClientSingleton = () => {
+	return new PrismaClient()
 }
 
-export { prisma }
+type PrismaClientSingleton = ReturnType<typeof prismaClientSingleton>
+
+const globalForPrisma = globalThis as unknown as {
+	prisma: PrismaClientSingleton | undefined
+}
+
+export const prisma = globalForPrisma.prisma ?? prismaClientSingleton()
+
+if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma

@@ -214,14 +214,14 @@
 
 <script setup lang="ts">
 import { ref, computed } from "vue"
-import type { Fascia } from "~/types/global"
+import type { FasciaEta } from "@prisma/client"
+import type { FasciaEtaForm } from "~/types/global"
 import { useFetch } from "nuxt/app"
 
-const ageRange = ref<Fascia>({
-	id_fascia: undefined,
+const ageRange = ref<FasciaEtaForm>({
 	descrizione: "",
-	anno_nascita_min: undefined,
-	anno_nascita_max: undefined,
+	anno_nascita_min: 0,
+	anno_nascita_max: 0,
 })
 
 const formVisible = ref(false)
@@ -238,7 +238,7 @@ const sortAsc = ref(true)
 const selectedAgeRanges = ref<number[]>([])
 
 // Effettua il fetch dei dati direttamente nello setup
-const { data: ageRanges } = await useFetch<Fascia[]>("/api/fasce")
+const { data: ageRanges } = await useFetch<FasciaEta[]>("/api/fasce")
 
 const appendYearsToTitle = ref(true)
 
@@ -269,7 +269,7 @@ const saveAgeRange = async () => {
 					(ar) => ar.id_fascia === ageRange.value.id_fascia
 				)
 				if (index !== undefined && index !== -1 && ageRanges.value) {
-					ageRanges.value[index] = data.value as Fascia
+					ageRanges.value[index] = data.value as FasciaEta
 				}
 			}
 		} else {
@@ -282,7 +282,7 @@ const saveAgeRange = async () => {
 			if (error.value) throw error.value
 
 			if (data.value && ageRanges.value) {
-				ageRanges.value.push(data.value as Fascia)
+				ageRanges.value.push(data.value as FasciaEta)
 			}
 		}
 
@@ -347,8 +347,13 @@ const previewTitle = computed(() => {
 	return ageRange.value.descrizione
 })
 
-const editAgeRange = (ar: Fascia) => {
-	ageRange.value = { ...ar }
+const editAgeRange = (ar: FasciaEta) => {
+	// Quando modifichiamo una fascia esistente, usiamo tutti i campi
+	ageRange.value = {
+		descrizione: ar.descrizione,
+		anno_nascita_min: ar.anno_nascita_min,
+		anno_nascita_max: ar.anno_nascita_max,
+	}
 	formVisible.value = true
 }
 
@@ -399,10 +404,9 @@ const openForm = () => {
 const closeForm = () => {
 	formVisible.value = false
 	ageRange.value = {
-		id_fascia: undefined,
 		descrizione: "",
-		anno_nascita_min: undefined,
-		anno_nascita_max: undefined,
+		anno_nascita_min: 0,
+		anno_nascita_max: 0,
 	}
 }
 

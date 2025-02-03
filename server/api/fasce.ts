@@ -1,8 +1,9 @@
 import { defineEventHandler, getQuery, readBody, createError } from "h3"
 import { prisma } from "~/lib/prisma"
+import type { Prisma } from "@prisma/client"
 
 export default defineEventHandler(async (event) => {
-	const method = event.node.req.method
+	const method = event.method || event.node.req.method
 
 	try {
 		// GET
@@ -32,12 +33,22 @@ export default defineEventHandler(async (event) => {
 		// POST
 		if (method === "POST") {
 			const body = await readBody(event)
-			return await prisma.fasciaEta.create({
-				data: {
+			// Verifica se esiste già una fascia con la stessa descrizione
+			const existingFascia = await prisma.fasciaEta.findFirst({
+				where: {
 					descrizione: body.descrizione,
-					anno_nascita_min: body.anno_nascita_min,
-					anno_nascita_max: body.anno_nascita_max,
 				},
+			})
+
+			if (existingFascia) {
+				throw createError({
+					statusCode: 409,
+					message: "Esiste già una fascia con questa descrizione",
+				})
+			}
+
+			return await prisma.fasciaEta.create({
+				data: body,
 			})
 		}
 
@@ -45,15 +56,11 @@ export default defineEventHandler(async (event) => {
 		if (method === "PUT") {
 			const query = getQuery(event)
 			const id = parseInt(query.id as string)
-			const body = await readBody(event)
+			const body = (await readBody(event)) as Prisma.FasciaEtaUpdateInput
 
 			return await prisma.fasciaEta.update({
 				where: { id_fascia: id },
-				data: {
-					descrizione: body.descrizione,
-					anno_nascita_min: body.anno_nascita_min,
-					anno_nascita_max: body.anno_nascita_max,
-				},
+				data: body,
 			})
 		}
 
@@ -69,5 +76,6 @@ export default defineEventHandler(async (event) => {
 		}
 	} catch (error) {
 		console.error("Errore nell'operazione:", error)
+		throw error
 	}
 })
