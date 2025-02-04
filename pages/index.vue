@@ -251,7 +251,7 @@
 <script setup>
 import { ref, onMounted, computed } from "vue"
 import { useFetch } from "nuxt/app"
-import LoadingOverlay from "@/components/LoadingOverlay.vue"
+import LoadingOverlay from "../components/LoadingOverlay.vue"
 
 const message = ref("")
 const error = ref(false)

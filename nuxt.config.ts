@@ -14,7 +14,7 @@ export default defineNuxtConfig({
 			autoprefixer: {},
 		},
 	},
-	modules: ["@nuxtjs/tailwindcss", "@pinia/nuxt"],
+	modules: ["@nuxtjs/tailwindcss", "@pinia/nuxt", "@nuxtjs/i18n"],
 	pages: true,
 	nitro: {
 		externals: {

@@ -1,14 +1,7 @@
 {
+	// https://nuxt.com/docs/guide/concepts/typescript
 	"extends": "./.nuxt/tsconfig.json",
 	"compilerOptions": {
-		"strict": true,
-		"skipLibCheck": true,
-		"noImplicitAny": false,
-		"types": ["vitest/globals", "node"],
-		"paths": {
-			"~/*": ["./*"],
-			"@/*": ["./*"]
-		}
-	},
-	"include": ["**/*.ts", "**/*.tsx", "**/*.vue", "server/api/export.mjs"]
+		"types": ["@nuxt/types", "@nuxtjs/i18n", "node"]
+	}
 }
