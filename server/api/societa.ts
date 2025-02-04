@@ -1,5 +1,5 @@
 import { defineEventHandler, getQuery, readBody, createError } from "h3"
-import { prisma } from "~/lib/prisma"
+import prisma from "../utils/prisma"
 
 export default defineEventHandler(async (event) => {
 	const method = event.node.req.method

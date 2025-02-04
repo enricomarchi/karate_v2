@@ -1,94 +1,13 @@
 generator client {
-    provider = "prisma-client-js"
+  provider = "prisma-client-js"
 }
 
 datasource db {
-    provider = "mysql"
-    url      = env("DATABASE_URL")
+  provider = "mysql"
+  url      = env("DATABASE_URL")
 }
 
-model FasciaEta {
-  id_fascia        Int               @id @default(autoincrement())
-  descrizione      String            @db.VarChar(50)
-  anno_nascita_min Int
-  anno_nascita_max Int
-  categorie        CategoriaFascia[]
-
-  @@map("fasce_eta")
-}
-
-model Cintura {
-  id_cintura Int                @id @default(autoincrement())
-  colore     String             @db.VarChar(20)
-  kyu        Decimal?           @db.Decimal(3, 1)
-  atleti     Atleta[]
-  categorie  CategoriaCintura[]
-
-  @@map("cinture")
-}
-
-model Disciplina {
-  id_disciplina        String                 @id @db.VarChar(20)
-  valore               String                 @db.VarChar(100)
-  categorie            Categoria[]
-  configurazioni_prove configurazioni_prove[]
-  iscrizioni           Iscrizione[]
-  prove                prove[]
-
-  @@map("discipline")
-}
-
-model Categoria {
-  id_categoria        Int                   @id @default(autoincrement())
-  nome                String                @db.VarChar(255)
-  id_disciplina       String                @db.VarChar(20)
-  sesso               categorie_sesso
-  peso_min            Decimal?              @db.Decimal(5, 2)
-  peso_max            Decimal?              @db.Decimal(5, 2)
-  n_ordine            Int?
-  disciplina          Disciplina            @relation(fields: [id_disciplina], references: [id_disciplina], onDelete: Cascade, map: "categorie_ibfk_1")
-  cinture             CategoriaCintura[]
-  fasce               CategoriaFascia[]
-  iscrizioni          Iscrizione[]
-  tabelloni_categorie tabelloni_categorie[]
-
-  @@index([id_disciplina], map: "id_disciplina")
-  @@map("categorie")
-}
-
-model CategoriaFascia {
-  id_categoria Int
-  id_fascia    Int
-  categoria    Categoria @relation(fields: [id_categoria], references: [id_categoria], onDelete: Cascade, map: "categorie_fasce_ibfk_1")
-  fascia       FasciaEta @relation(fields: [id_fascia], references: [id_fascia], onDelete: Cascade, map: "categorie_fasce_ibfk_2")
-
-  @@id([id_categoria, id_fascia])
-  @@index([id_fascia], map: "id_fascia")
-  @@map("categorie_fasce")
-}
-
-model CategoriaCintura {
-  id_categoria Int
-  id_cintura   Int
-  categoria    Categoria @relation(fields: [id_categoria], references: [id_categoria], onDelete: Cascade, map: "categorie_cinture_ibfk_1")
-  cintura      Cintura   @relation(fields: [id_cintura], references: [id_cintura], onDelete: Cascade, map: "categorie_cinture_ibfk_2")
-
-  @@id([id_categoria, id_cintura])
-  @@index([id_cintura], map: "id_cintura")
-  @@map("categorie_cinture")
-}
-
-model Societa {
-  id_societa       Int      @id @default(autoincrement())
-  nome_societa     String   @db.VarChar(100)
-  pagato           Decimal? @default(0.00) @db.Decimal(10, 2)
-  resto_consegnato Decimal? @default(0.00) @db.Decimal(10, 2)
-  atleti           Atleta[]
-
-  @@map("societa")
-}
-
-model Atleta {
+model atleti {
   id_atleta                                              Int              @id @default(autoincrement())
   cognome                                                String           @db.VarChar(50)
   nome                                                   String           @db.VarChar(50)
@@ -98,38 +17,59 @@ model Atleta {
   dan                                                    Int?
   peso_kg                                                Int?
   id_societa                                             Int
-  societa                                                Societa          @relation(fields: [id_societa], references: [id_societa], onDelete: Cascade, map: "atleti_ibfk_1")
-  cintura                                                Cintura?         @relation(fields: [cintura_id], references: [id_cintura], map: "atleti_ibfk_2")
+  societa                                                societa          @relation(fields: [id_societa], references: [id_societa], onDelete: Cascade, map: "atleti_ibfk_1")
+  cinture                                                cinture?         @relation(fields: [cintura_id], references: [id_cintura], map: "atleti_ibfk_2")
   incontri_prova_incontri_prova_id_atleta_rossoToatleti  incontri_prova[] @relation("incontri_prova_id_atleta_rossoToatleti")
   incontri_prova_incontri_prova_id_atleta_biancoToatleti incontri_prova[] @relation("incontri_prova_id_atleta_biancoToatleti")
-  iscrizioni                                             Iscrizione[]
+  iscrizioni                                             iscrizioni[]
 
   @@index([cintura_id], map: "cintura_id")
   @@index([id_societa], map: "id_societa")
-  @@map("atleti")
 }
 
-model Iscrizione {
-  id_iscrizione     Int        @id @default(autoincrement())
-  id_atleta         Int
-  id_disciplina     String     @db.VarChar(20)
-  id_categoria      Int?
-  id_tabellone      Int?
-  data_iscrizione   DateTime?  @default(now()) @db.Timestamp(0)
-  manuale           Boolean?   @default(false)
-  confermata        Boolean?   @default(false)
-  ammesso_in_finale Boolean?   @default(false)
-  classifica        Int?
-  atleta            Atleta     @relation(fields: [id_atleta], references: [id_atleta], onDelete: Cascade, map: "iscrizioni_ibfk_1")
-  categoria         Categoria? @relation(fields: [id_categoria], references: [id_categoria], onDelete: Cascade, map: "iscrizioni_ibfk_2")
-  disciplina        Disciplina @relation(fields: [id_disciplina], references: [id_disciplina], onDelete: Cascade, map: "iscrizioni_ibfk_3")
-  tabelloni         tabelloni? @relation(fields: [id_tabellone], references: [id_tabellone], map: "iscrizioni_ibfk_4")
+model categorie {
+  id_categoria        Int                   @id @default(autoincrement())
+  nome                String                @db.VarChar(255)
+  id_disciplina       String                @db.VarChar(20)
+  sesso               categorie_sesso
+  peso_min            Decimal?              @db.Decimal(5, 2)
+  peso_max            Decimal?              @db.Decimal(5, 2)
+  n_ordine            Int?
+  discipline          discipline            @relation(fields: [id_disciplina], references: [id_disciplina], onDelete: Cascade, map: "categorie_ibfk_1")
+  categorie_cinture   categorie_cinture[]
+  categorie_fasce     categorie_fasce[]
+  iscrizioni          iscrizioni[]
+  tabelloni_categorie tabelloni_categorie[]
 
-  @@index([id_atleta], map: "id_atleta")
-  @@index([id_categoria], map: "id_categoria")
   @@index([id_disciplina], map: "id_disciplina")
-  @@index([id_tabellone], map: "id_tabellone")
-  @@map("iscrizioni")
+}
+
+model categorie_cinture {
+  id_categoria Int
+  id_cintura   Int
+  categorie    categorie @relation(fields: [id_categoria], references: [id_categoria], onDelete: Cascade, map: "categorie_cinture_ibfk_1")
+  cinture      cinture   @relation(fields: [id_cintura], references: [id_cintura], onDelete: Cascade, map: "categorie_cinture_ibfk_2")
+
+  @@id([id_categoria, id_cintura])
+  @@index([id_cintura], map: "id_cintura")
+}
+
+model categorie_fasce {
+  id_categoria Int
+  id_fascia    Int
+  categorie    categorie @relation(fields: [id_categoria], references: [id_categoria], onDelete: Cascade, map: "categorie_fasce_ibfk_1")
+  fasce_eta    fasce_eta @relation(fields: [id_fascia], references: [id_fascia], onDelete: Cascade, map: "categorie_fasce_ibfk_2")
+
+  @@id([id_categoria, id_fascia])
+  @@index([id_fascia], map: "id_fascia")
+}
+
+model cinture {
+  id_cintura        Int                 @id @default(autoincrement())
+  colore            String              @db.VarChar(20)
+  kyu               Decimal?            @db.Decimal(3, 1)
+  atleti            atleti[]
+  categorie_cinture categorie_cinture[]
 }
 
 model configurazioni_prove {
@@ -144,7 +84,7 @@ model configurazioni_prove {
   calcola_totali           Boolean?                          @default(false)
   durata_incontro          DateTime?                         @default(dbgenerated("'00:00:20'")) @db.Time(0)
   configurazioni_tabelloni configurazioni_tabelloni          @relation(fields: [config_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "configurazioni_prove_ibfk_1")
-  discipline               Disciplina                        @relation(fields: [disciplina], references: [id_disciplina], onDelete: NoAction, onUpdate: NoAction, map: "configurazioni_prove_ibfk_2")
+  discipline               discipline                        @relation(fields: [disciplina], references: [id_disciplina], onDelete: NoAction, onUpdate: NoAction, map: "configurazioni_prove_ibfk_2")
   template_tabelloni       template_tabelloni?               @relation(fields: [template_tabellone], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "configurazioni_prove_ibfk_3")
 
   @@index([config_id], map: "config_id")
@@ -158,6 +98,23 @@ model configurazioni_tabelloni {
   data_creazione       DateTime?              @default(now()) @db.Timestamp(0)
   configurazioni_prove configurazioni_prove[]
   tabelloni            tabelloni[]
+}
+
+model discipline {
+  id_disciplina        String                 @id @db.VarChar(20)
+  valore               String                 @db.VarChar(100)
+  categorie            categorie[]
+  configurazioni_prove configurazioni_prove[]
+  iscrizioni           iscrizioni[]
+  prove                prove[]
+}
+
+model fasce_eta {
+  id_fascia        Int               @id @default(autoincrement())
+  descrizione      String            @db.VarChar(50)
+  anno_nascita_min Int
+  anno_nascita_max Int
+  categorie_fasce  categorie_fasce[]
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -177,13 +134,35 @@ model incontri_prova {
   ordine                                         Int
   turno                                          String          @db.VarChar(20)
   prove                                          prove           @relation(fields: [id_prova], references: [id_prova], onDelete: Cascade, map: "incontri_prova_ibfk_1")
-  atleti_incontri_prova_id_atleta_rossoToatleti  Atleta?         @relation("incontri_prova_id_atleta_rossoToatleti", fields: [id_atleta_rosso], references: [id_atleta], map: "incontri_prova_ibfk_2")
-  atleti_incontri_prova_id_atleta_biancoToatleti Atleta?         @relation("incontri_prova_id_atleta_biancoToatleti", fields: [id_atleta_bianco], references: [id_atleta], map: "incontri_prova_ibfk_3")
+  atleti_incontri_prova_id_atleta_rossoToatleti  atleti?         @relation("incontri_prova_id_atleta_rossoToatleti", fields: [id_atleta_rosso], references: [id_atleta], map: "incontri_prova_ibfk_2")
+  atleti_incontri_prova_id_atleta_biancoToatleti atleti?         @relation("incontri_prova_id_atleta_biancoToatleti", fields: [id_atleta_bianco], references: [id_atleta], map: "incontri_prova_ibfk_3")
   voti_incontro                                  voti_incontro[]
 
   @@index([id_atleta_bianco], map: "id_atleta_bianco")
   @@index([id_atleta_rosso], map: "id_atleta_rosso")
   @@index([id_prova], map: "id_prova")
+}
+
+model iscrizioni {
+  id_iscrizione     Int        @id @default(autoincrement())
+  id_atleta         Int
+  id_disciplina     String     @db.VarChar(20)
+  id_categoria      Int?
+  id_tabellone      Int?
+  data_iscrizione   DateTime?  @default(now()) @db.Timestamp(0)
+  manuale           Boolean?   @default(false)
+  confermata        Boolean?   @default(false)
+  ammesso_in_finale Boolean?   @default(false)
+  classifica        Int?
+  atleti            atleti     @relation(fields: [id_atleta], references: [id_atleta], onDelete: Cascade, map: "iscrizioni_ibfk_1")
+  categorie         categorie? @relation(fields: [id_categoria], references: [id_categoria], onDelete: Cascade, map: "iscrizioni_ibfk_2")
+  discipline        discipline @relation(fields: [id_disciplina], references: [id_disciplina], onDelete: Cascade, map: "iscrizioni_ibfk_3")
+  tabelloni         tabelloni? @relation(fields: [id_tabellone], references: [id_tabellone], map: "iscrizioni_ibfk_4")
+
+  @@index([id_atleta], map: "id_atleta")
+  @@index([id_categoria], map: "id_categoria")
+  @@index([id_disciplina], map: "id_disciplina")
+  @@index([id_tabellone], map: "id_tabellone")
 }
 
 model kata_shotokan {
@@ -212,7 +191,7 @@ model prove {
   durata_incontro      DateTime?           @default(dbgenerated("'00:00:20'")) @db.Time(0)
   incontri_prova       incontri_prova[]
   tabelloni            tabelloni           @relation(fields: [id_tabellone], references: [id_tabellone], onDelete: Cascade, onUpdate: NoAction, map: "prove_ibfk_1")
-  discipline           Disciplina          @relation(fields: [id_disciplina], references: [id_disciplina], onDelete: NoAction, onUpdate: NoAction, map: "prove_ibfk_2")
+  discipline           discipline          @relation(fields: [id_disciplina], references: [id_disciplina], onDelete: NoAction, onUpdate: NoAction, map: "prove_ibfk_2")
   template_tabelloni   template_tabelloni? @relation(fields: [template_tabellone], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "prove_ibfk_3")
 
   @@index([id_disciplina], map: "id_disciplina")
@@ -225,6 +204,14 @@ model punteggi_societa {
   posizione   Int     @id
   punti       Int
   descrizione String? @db.VarChar(50)
+}
+
+model societa {
+  id_societa       Int      @id @default(autoincrement())
+  nome_societa     String   @db.VarChar(100)
+  pagato           Decimal? @default(0.00) @db.Decimal(10, 2)
+  resto_consegnato Decimal? @default(0.00) @db.Decimal(10, 2)
+  atleti           atleti[]
 }
 
 model tabelloni {
@@ -240,7 +227,7 @@ model tabelloni {
   ora_inizio_effettiva     DateTime?                 @db.DateTime(0)
   ora_fine_effettiva       DateTime?                 @db.DateTime(0)
   stampato                 Boolean?                  @default(false)
-  iscrizioni               Iscrizione[]
+  iscrizioni               iscrizioni[]
   prove                    prove[]
   configurazioni_tabelloni configurazioni_tabelloni? @relation(fields: [configurazione_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "tabelloni_ibfk_1")
   tabelloni_categorie      tabelloni_categorie[]
@@ -252,7 +239,7 @@ model tabelloni_categorie {
   id_tabellone Int
   id_categoria Int
   tabelloni    tabelloni @relation(fields: [id_tabellone], references: [id_tabellone], onDelete: Cascade, onUpdate: NoAction, map: "tabelloni_categorie_ibfk_1")
-  categorie    Categoria @relation(fields: [id_categoria], references: [id_categoria], onDelete: Cascade, onUpdate: NoAction, map: "tabelloni_categorie_ibfk_2")
+  categorie    categorie @relation(fields: [id_categoria], references: [id_categoria], onDelete: Cascade, onUpdate: NoAction, map: "tabelloni_categorie_ibfk_2")
 
   @@id([id_tabellone, id_categoria])
   @@index([id_categoria], map: "id_categoria")
@@ -285,4 +272,61 @@ model voti_incontro {
   incontri_prova incontri_prova            @relation(fields: [id_incontro], references: [id_incontro], onDelete: Cascade, onUpdate: NoAction, map: "voti_incontro_ibfk_1")
 
   @@unique([id_incontro, numero_arbitro], map: "unique_voto")
+}
+
+enum atleti_sesso {
+  M
+  F
+}
+
+enum categorie_sesso {
+  M
+  F
+  X
+}
+
+enum kata_shotokan_livello {
+  BASE
+  INTERMEDIO
+  AVANZATO
+}
+
+enum voti_incontro_bandierina {
+  ROSSO
+  BIANCO
+}
+
+enum configurazioni_prove_valutazione {
+  PUNTEGGIO
+  BANDIERINE
+}
+
+enum prove_stato {
+  DA_INIZIARE
+  IN_CORSO
+  COMPLETATA
+}
+
+enum tabelloni_stato {
+  BOZZA
+  ATTIVO
+  COMPLETATO
+}
+
+enum utenti_ruolo {
+  amministratore
+  pdg_tavolo_centrale
+  pdg_tatami
+  societa
+}
+
+enum prove_valutazione {
+  PUNTEGGIO
+  BANDIERINE
+}
+
+enum tabelloni_tipo {
+  CATEGORIA_SINGOLA
+  POOL
+  ACCORPAMENTO
 }

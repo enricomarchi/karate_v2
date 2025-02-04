@@ -2,11 +2,11 @@ import { defineNuxtConfig } from "nuxt/config"
 
 export default defineNuxtConfig({
 	compatibilityDate: "2024-04-03",
-	devtools: { enabled: false },
+	devtools: { enabled: true },
 	css: [
 		"@fortawesome/fontawesome-free/css/all.css",
 		"~/assets/css/tailwind.css",
-		"@/assets/css/global.css", // aggiungi questa riga
+		"@/assets/css/global.css",
 	],
 	postcss: {
 		plugins: {
@@ -14,28 +14,14 @@ export default defineNuxtConfig({
 			autoprefixer: {},
 		},
 	},
-	modules: ["@nuxtjs/tailwindcss", "@pinia/nuxt", "@nuxtjs/i18n"],
+	modules: ["@nuxtjs/tailwindcss", "@pinia/nuxt", "@prisma/nuxt"],
 	pages: true,
 	nitro: {
-		externals: {
-			inline: ["xlsx"],
-		},
-		esbuild: {
-			options: {
-				tsconfigRaw: {
-					compilerOptions: {
-						experimentalDecorators: true,
-					},
-				},
-			},
-		},
-	},
-	build: {
-		transpile: ["xlsx"],
+		preset: "node-server",
 	},
 	runtimeConfig: {
 		prisma: {
-			clientUrl: process.env.DATABASE_URL,
+			database: process.env.DATABASE_URL,
 		},
 	},
 })

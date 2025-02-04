@@ -214,8 +214,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from "vue"
-import type { FasciaEta } from "@prisma/client"
-import type { FasciaEtaForm } from "~/types/global"
+import type { PrismaClient } from "@prisma/client"
 import { useFetch } from "nuxt/app"
 
 const ageRange = ref<FasciaEtaForm>({
@@ -254,35 +253,30 @@ const saveAgeRange = async () => {
 			ageRange.value.descrizione = previewTitle.value
 		}
 
+		const endpoint = "/api/fasce"
+		const options: any = {
+			method: ageRange.value.id_fascia ? "PUT" : "POST",
+			body: ageRange.value,
+		}
+
 		if (ageRange.value.id_fascia) {
-			// UPDATE
-			const { data, error } = await useFetch(`/api/fasce`, {
-				method: "PUT",
-				query: { id: ageRange.value.id_fascia },
-				body: ageRange.value,
-			})
+			options.query = { id: ageRange.value.id_fascia }
+		}
 
-			if (error.value) throw error.value
+		const { data, error } = await useFetch<FasciaEta>(endpoint, options)
 
-			if (data.value) {
-				const index = ageRanges.value?.findIndex(
+		if (error.value) throw error.value
+
+		if (data.value && ageRanges.value) {
+			if (ageRange.value.id_fascia) {
+				const index = ageRanges.value.findIndex(
 					(ar) => ar.id_fascia === ageRange.value.id_fascia
 				)
-				if (index !== undefined && index !== -1 && ageRanges.value) {
-					ageRanges.value[index] = data.value as FasciaEta
+				if (index !== -1) {
+					ageRanges.value[index] = data.value
 				}
-			}
-		} else {
-			// CREATE
-			const { data, error } = await useFetch("/api/fasce", {
-				method: "POST",
-				body: ageRange.value,
-			})
-
-			if (error.value) throw error.value
-
-			if (data.value && ageRanges.value) {
-				ageRanges.value.push(data.value as FasciaEta)
+			} else {
+				ageRanges.value.push(data.value)
 			}
 		}
 
@@ -374,7 +368,7 @@ const copySelectedAgeRanges = () => {
 	alert("Fasce d'età copiate negli appunti!")
 }
 
-const sortTable = (key) => {
+const sortTable = (key: keyof FasciaEta) => {
 	if (sortKey.value === key) {
 		sortAsc.value = !sortAsc.value
 	} else {

@@ -1,5 +1,5 @@
 import { defineEventHandler, getQuery, readBody, createError } from "h3"
-import { prisma } from "~/lib/prisma"
+import prisma from "../utils/prisma"
 
 export default defineEventHandler(async (event) => {
 	const method = event.node.req.method
@@ -11,15 +11,15 @@ export default defineEventHandler(async (event) => {
 			const id = query.id ? parseInt(query.id as string) : null
 
 			if (id) {
-				const atleta = await prisma.atleta.findUnique({
+				const atleta = await prisma.atleti.findUnique({
 					where: { id_atleta: id },
 					include: {
-						cintura: true,
+						cinture: true,
 						societa: true,
 						iscrizioni: {
 							include: {
-								categoria: true,
-								disciplina: true,
+								categorie: true,
+								discipline: true,
 							},
 						},
 					},
@@ -32,9 +32,9 @@ export default defineEventHandler(async (event) => {
 				return atleta
 			}
 
-			return await prisma.atleta.findMany({
+			return await prisma.atleti.findMany({
 				include: {
-					cintura: true,
+					cinture: true,
 					societa: true,
 				},
 			})
@@ -43,7 +43,7 @@ export default defineEventHandler(async (event) => {
 		// POST
 		if (method === "POST") {
 			const body = await readBody(event)
-			return await prisma.atleta.create({
+			return await prisma.atleti.create({
 				data: {
 					cognome: body.cognome,
 					nome: body.nome,
@@ -55,7 +55,7 @@ export default defineEventHandler(async (event) => {
 					id_societa: body.id_societa,
 				},
 				include: {
-					cintura: true,
+					cinture: true,
 					societa: true,
 				},
 			})
@@ -68,7 +68,7 @@ export default defineEventHandler(async (event) => {
 			const body = await readBody(event)
 
 			// Aggiornamento dell'atleta
-			const updatedAthlete = await prisma.atleta.update({
+			const updatedAthlete = await prisma.atleti.update({
 				where: { id_atleta: id },
 				data: {
 					cognome: body.cognome,
@@ -81,7 +81,7 @@ export default defineEventHandler(async (event) => {
 					id_societa: body.id_societa,
 				},
 				include: {
-					cintura: true,
+					cinture: true,
 					societa: true,
 					iscrizioni: true,
 				},
@@ -97,7 +97,7 @@ export default defineEventHandler(async (event) => {
 
 			// Prisma gestirà automaticamente l'eliminazione delle iscrizioni correlate
 			// grazie alla relazione onDelete: Cascade definita nello schema
-			await prisma.atleta.delete({
+			await prisma.atleti.delete({
 				where: { id_atleta: id },
 			})
 

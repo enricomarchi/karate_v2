@@ -1,6 +1,6 @@
 import { defineEventHandler, getQuery, readBody, createError } from "h3"
-import { prisma } from "~/lib/prisma"
-import { type Prisma } from "@prisma/client"
+import prisma from "../utils/prisma"
+import { type Prisma, categorie_sesso } from "@prisma/client" // Aggiungi l'import dell'enum
 
 interface CreateCategoriaBody {
 	nome: string
@@ -34,9 +34,9 @@ export default defineEventHandler(async (event) => {
 				: null
 
 			if (atletaId) {
-				const atleta = await prisma.atleta.findUnique({
+				const atleta = await prisma.atleti.findUnique({
 					where: { id_atleta: atletaId },
-					include: { cintura: true },
+					include: { cinture: true },
 				})
 
 				if (!atleta || !atleta.cintura_id) {
@@ -47,13 +47,15 @@ export default defineEventHandler(async (event) => {
 				}
 
 				// Trova categorie compatibili
-				return await prisma.categoria.findMany({
+				return await prisma.categorie.findMany({
 					where: {
 						OR: [{ sesso: atleta.sesso }, { sesso: "X" }],
-						cinture: { some: { id_cintura: atleta.cintura_id } },
-						fasce: {
+						categorie_cinture: {
+							some: { id_cintura: atleta.cintura_id },
+						},
+						categorie_fasce: {
 							some: {
-								fascia: {
+								fasce_eta: {
 									anno_nascita_min: {
 										lte: atleta.anno_nascita,
 									},
@@ -87,20 +89,20 @@ export default defineEventHandler(async (event) => {
 						],
 					},
 					include: {
-						disciplina: true,
-						fasce: { include: { fascia: true } },
-						cinture: { include: { cintura: true } },
+						discipline: true,
+						categorie_fasce: { include: { fasce_eta: true } },
+						categorie_cinture: { include: { cinture: true } },
 					},
 				})
 			}
 
 			if (id) {
-				const categoria = await prisma.categoria.findUnique({
+				const categoria = await prisma.categorie.findUnique({
 					where: { id_categoria: id },
 					include: {
-						disciplina: true,
-						fasce: { include: { fascia: true } },
-						cinture: { include: { cintura: true } },
+						discipline: true,
+						categorie_fasce: { include: { fasce_eta: true } },
+						categorie_cinture: { include: { cinture: true } },
 					},
 				})
 
@@ -114,103 +116,122 @@ export default defineEventHandler(async (event) => {
 				return categoria
 			}
 
-			return await prisma.categoria.findMany({
+			return await prisma.categorie.findMany({
 				include: {
-					disciplina: true,
-					fasce: { include: { fascia: true } },
-					cinture: { include: { cintura: true } },
+					discipline: true,
+					categorie_fasce: { include: { fasce_eta: true } },
+					categorie_cinture: { include: { cinture: true } },
 				},
 			})
 		}
 
 		// POST
 		if (method === "POST") {
-			const body = await readBody(event)
+			const body = (await readBody(event)) as CreateCategoriaBody
 
-			const data: Prisma.CategoriaCreateInput = {
-				nome: body.nome,
-				sesso: body.sesso,
-				disciplina: {
-					connect: {
-						id_disciplina:
-							body.disciplina?.id_disciplina ||
-							body.id_disciplina,
+			const categoria = await prisma.categorie.create({
+				data: {
+					nome: body.nome,
+					sesso: body.sesso as categorie_sesso, // Ora TypeScript riconoscerà l'enum
+					id_disciplina:
+						body.id_disciplina ||
+						body.disciplina?.id_disciplina ||
+						"",
+					peso_min: body.peso_min
+						? parseFloat(body.peso_min.toString())
+						: null,
+					peso_max: body.peso_max
+						? parseFloat(body.peso_max.toString())
+						: null,
+					n_ordine: body.n_ordine || (await getNextOrder()),
+					categorie_fasce: {
+						create:
+							body.fasce?.map((id_fascia) => ({
+								fasce_eta: {
+									connect: { id_fascia },
+								},
+							})) || [],
+					},
+					categorie_cinture: {
+						create:
+							body.cinture?.map((id_cintura) => ({
+								cinture: {
+									connect: { id_cintura },
+								},
+							})) || [],
 					},
 				},
-				peso_min: body.peso_min || null,
-				peso_max: body.peso_max || null,
-				n_ordine: body.n_ordine || (await getNextOrder()),
-				fasce: {
-					create: body.fasce?.map((id_fascia: number) => ({
-						fascia: { connect: { id_fascia } },
-					})),
-				},
-				cinture: {
-					create: body.cinture?.map((id_cintura: number) => ({
-						cintura: { connect: { id_cintura } },
-					})),
-				},
-			}
-
-			return await prisma.categoria.create({
-				data,
 				include: {
-					disciplina: true,
-					fasce: { include: { fascia: true } },
-					cinture: { include: { cintura: true } },
+					discipline: true,
+					categorie_fasce: { include: { fasce_eta: true } },
+					categorie_cinture: { include: { cinture: true } },
 				},
 			})
+
+			return categoria
 		}
 
 		// PUT
 		if (method === "PUT") {
 			const id = parseInt(query.id as string)
-			const body = await readBody(event)
+			const body = (await readBody(event)) as UpdateCategoriaBody
 
-			const data: Prisma.CategoriaUpdateInput = {
-				nome: body.nome,
-				sesso: body.sesso,
-				disciplina: body.id_disciplina
-					? {
-							connect: { id_disciplina: body.id_disciplina },
-					  }
-					: undefined,
-				peso_min: body.peso_min ?? null,
-				peso_max: body.peso_max ?? null,
-				n_ordine: body.n_ordine,
-				fasce: body.fasce
-					? {
-							deleteMany: {},
-							create: body.fasce.map((id_fascia: number) => ({
-								fascia: { connect: { id_fascia } },
-							})),
-					  }
-					: undefined,
-				cinture: body.cinture
-					? {
-							deleteMany: {},
-							create: body.cinture.map((id_cintura: number) => ({
-								cintura: { connect: { id_cintura } },
-							})),
-					  }
-					: undefined,
-			}
-
-			return await prisma.categoria.update({
+			// Prima elimina le relazioni esistenti
+			await prisma.categorie_fasce.deleteMany({
 				where: { id_categoria: id },
-				data,
+			})
+			await prisma.categorie_cinture.deleteMany({
+				where: { id_categoria: id },
+			})
+
+			// Poi aggiorna la categoria con le nuove relazioni
+			const categoria = await prisma.categorie.update({
+				where: { id_categoria: id },
+				data: {
+					nome: body.nome,
+					sesso: body.sesso as categorie_sesso, // Ora TypeScript riconoscerà l'enum
+					id_disciplina:
+						body.id_disciplina ||
+						body.disciplina?.id_disciplina ||
+						"",
+					peso_min: body.peso_min
+						? parseFloat(body.peso_min.toString())
+						: null,
+					peso_max: body.peso_max
+						? parseFloat(body.peso_max.toString())
+						: null,
+					n_ordine: body.n_ordine,
+					categorie_fasce: {
+						create:
+							body.fasce?.map((id_fascia) => ({
+								fasce_eta: {
+									connect: { id_fascia },
+								},
+							})) || [],
+					},
+					categorie_cinture: {
+						create:
+							body.cinture?.map((id_cintura) => ({
+								cinture: {
+									connect: { id_cintura },
+								},
+							})) || [],
+					},
+				},
 				include: {
-					disciplina: true,
-					fasce: { include: { fascia: true } },
-					cinture: { include: { cintura: true } },
+					discipline: true,
+					categorie_fasce: { include: { fasce_eta: true } },
+					categorie_cinture: { include: { cinture: true } },
 				},
 			})
+
+			return categoria
 		}
 
 		// DELETE
 		if (method === "DELETE") {
 			const id = parseInt(query.id as string)
-			await prisma.categoria.delete({
+			await prisma.categorie.delete({
 				where: { id_categoria: id },
 			})
 			return { id_categoria: id }
@@ -227,12 +248,12 @@ export default defineEventHandler(async (event) => {
 			: createError({
 					statusCode: 500,
 					message: "Errore interno del server",
-			  })
+				})
 	}
 })
 
 async function getNextOrder() {
-	const maxOrder = await prisma.categoria.aggregate({
+	const maxOrder = await prisma.categorie.aggregate({
 		_max: { n_ordine: true },
 	})
 	return (maxOrder._max.n_ordine || 0) + 1

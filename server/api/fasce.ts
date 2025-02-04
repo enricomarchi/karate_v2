@@ -1,6 +1,6 @@
 import { defineEventHandler, getQuery, readBody, createError } from "h3"
-import { prisma } from "~/lib/prisma"
-import type { Prisma } from "@prisma/client"
+import prisma from "../utils/prisma"
+import type { PrismaClient } from "@prisma/client"
 
 export default defineEventHandler(async (event) => {
 	const method = event.method || event.node.req.method
@@ -12,7 +12,7 @@ export default defineEventHandler(async (event) => {
 			const id = query.id ? parseInt(query.id as string) : null
 
 			if (id) {
-				const fascia = await prisma.fasciaEta.findUnique({
+				const fascia = await prisma.fasce_eta.findUnique({
 					where: { id_fascia: id },
 				})
 				if (!fascia)
@@ -23,9 +23,9 @@ export default defineEventHandler(async (event) => {
 				return fascia
 			}
 
-			return await prisma.fasciaEta.findMany({
+			return await prisma.fasce_eta.findMany({
 				include: {
-					categorie: true, // Questo includerà le relazioni con le categorie
+					categorie_fasce: true, // Questo includerà le relazioni con le categorie
 				},
 			})
 		}
@@ -34,7 +34,7 @@ export default defineEventHandler(async (event) => {
 		if (method === "POST") {
 			const body = await readBody(event)
 			// Verifica se esiste già una fascia con la stessa descrizione
-			const existingFascia = await prisma.fasciaEta.findFirst({
+			const existingFascia = await prisma.fasce_eta.findFirst({
 				where: {
 					descrizione: body.descrizione,
 				},
@@ -47,7 +47,7 @@ export default defineEventHandler(async (event) => {
 				})
 			}
 
-			return await prisma.fasciaEta.create({
+			return await prisma.fasce_eta.create({
 				data: body,
 			})
 		}
@@ -56,9 +56,9 @@ export default defineEventHandler(async (event) => {
 		if (method === "PUT") {
 			const query = getQuery(event)
 			const id = parseInt(query.id as string)
-			const body = (await readBody(event)) as Prisma.FasciaEtaUpdateInput
+			const body = await readBody(event)
 
-			return await prisma.fasciaEta.update({
+			return await prisma.fasce_eta.update({
 				where: { id_fascia: id },
 				data: body,
 			})
@@ -69,7 +69,7 @@ export default defineEventHandler(async (event) => {
 			const query = getQuery(event)
 			const id = parseInt(query.id as string)
 
-			await prisma.fasciaEta.delete({
+			await prisma.fasce_eta.delete({
 				where: { id_fascia: id },
 			})
 			return { id_fascia: id }
