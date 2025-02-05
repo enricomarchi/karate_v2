@@ -24,4 +24,14 @@ export default defineNuxtConfig({
 			database: process.env.DATABASE_URL,
 		},
 	},
+	typescript: {
+		shim: false,
+		strict: true,
+		typeCheck: true, // Disabilitiamo temporaneamente il type checking durante lo sviluppo
+	},
+	prisma: {
+		clientOptions: {
+			log: ["query", "info", "warn", "error"],
+		},
+	},
 })

@@ -260,29 +260,21 @@
 </template>
 
 <script setup lang="ts">
-import { ref, type Ref, computed, watch, onMounted } from "vue"
-import { useFetch } from "nuxt/app" // Importa useFetch correttamente da 'nuxt/app'
-import CategoriaFormModal from "@/components/CategoriaFormModal.vue"
-import CategorieAutomaticheFormModal from "@/components/CategorieAutomaticheFormModal.vue"
-import LoadingOverlay from "@/components/LoadingOverlay.vue"
+import { ref, computed, watch, onMounted } from "vue"
+import { useFetch } from "#app"
 import type {
-	Categoria,
-	Disciplina,
-	FasciaEta,
-	Cintura,
-	CategoriaFascia,
-	CategoriaCintura,
+	categorie as Categoria,
+	fasce_eta as FasciaEta,
+	cinture as Cintura,
+	discipline as Disciplina,
+	categorie_sesso,
 } from "@prisma/client"
-import {
-	getSessoOptions,
-	type CategorieSovrapposte,
-	type CategoriaWithRelations,
-} from "~/types/global"
+import type {
+	CategorieSovrapposte,
+	CategoriaWithRelations,
+} from "~/types/categorie"
 
-// Rimuovi la definizione statica di sessoOptions e usa getSessoOptions
-const sessoOptions = getSessoOptions()
-
-// Update ref types
+// Stato iniziale tipizzato correttamente
 const categoria = ref<Partial<CategoriaWithRelations>>({
 	nome: "",
 	id_disciplina: "",
@@ -290,39 +282,120 @@ const categoria = ref<Partial<CategoriaWithRelations>>({
 	peso_min: null,
 	peso_max: null,
 	n_ordine: null,
-	fasce: [],
-	cinture: [],
+	categorie_fasce: [],
+	categorie_cinture: [],
 })
 
-// Update API calls to use proper types
+// Modifica la tipizzazione del ref per categorie
 const { data: categorie } = await useFetch<CategoriaWithRelations[]>(
-	"/api/categorie"
+	"/api/categorie",
+	{
+		default: () => [], // Fornisce un valore di default come array vuoto invece di null
+	}
 )
-const { data: discipline } = await useFetch<Disciplina[]>("/api/discipline")
-const { data: fasceEta } = await useFetch<FasciaEta[]>("/api/fasce")
-const { data: cinture } = await useFetch<Cintura[]>("/api/cinture")
 
-// Modifica la chiamata API per utilizzare il nuovo tipo
-const { data: categorieOverlapResponse } = await useFetch<{
-	details: CategorieSovrapposte[]
-	overlappingIds: number[]
-}>("/api/categorie-sovrapposte") // URL corretto
+// Aggiorna anche gli altri ref per sicurezza
+const { data: discipline } = await useFetch<Disciplina[]>("/api/discipline", {
+	default: () => [],
+})
+const { data: fasceEta } = await useFetch<FasciaEta[]>("/api/fasce", {
+	default: () => [],
+})
+const { data: cinture } = await useFetch<Cintura[]>("/api/cinture", {
+	default: () => [],
+})
 
-// Sostituisci le computed properties con refs
+// Aggiorna anche il ref per le sovrapposizioni
 const categorieOverlap = ref<number[]>([])
 const overlapDetails = ref<CategorieSovrapposte[]>([])
 
-// Aggiorna i valori quando arrivano i dati
-watch(
-	() => categorieOverlapResponse.value,
-	(newValue) => {
-		if (newValue) {
-			categorieOverlap.value = newValue.overlappingIds
-			overlapDetails.value = newValue.details
-		}
-	},
-	{ immediate: true }
-)
+// Opzioni per il select del sesso
+const sessoOptions = [
+	{ value: "M", label: "Maschile" },
+	{ value: "F", label: "Femminile" },
+	{ value: "X", label: "Misto" },
+] as const
+
+// Update saveCategoria function
+const saveCategoria = async (
+	savedCategoria: Partial<CategoriaWithRelations>
+) => {
+	if (!savedCategoria.nome) {
+		console.error("Nome categoria richiesto")
+		return
+	}
+
+	loading.value = true
+	loadingMessage.value = "Salvataggio in corso..."
+
+	try {
+		const endpoint = "/api/categorie"
+		const method = savedCategoria.id_categoria ? "PUT" : "POST"
+
+		const { data, error } = await useFetch<CategoriaWithRelations>(
+			endpoint,
+			{
+				method,
+				body: savedCategoria,
+				query: savedCategoria.id_categoria
+					? { id: savedCategoria.id_categoria }
+					: undefined,
+			}
+		)
+
+		if (error.value) throw error.value
+
+		// Aggiorna la lista delle categorie
+		await refreshCategorie()
+
+		closeForm()
+		feedbackMessage.value = "Categoria salvata con successo"
+		feedbackType.value = "success"
+	} catch (error) {
+		console.error("Errore nel salvataggio:", error)
+		feedbackMessage.value =
+			error instanceof Error
+				? error.message
+				: "Errore durante il salvataggio"
+		feedbackType.value = "error"
+	} finally {
+		loading.value = false
+	}
+}
+
+// Aggiorna la funzione sortTable per gestire correttamente i tipi
+const sortTable = (key: keyof Categoria) => {
+	if (!categorie.value) return
+
+	if (sortKey.value === key) {
+		sortAsc.value = !sortAsc.value
+	} else {
+		sortKey.value = key
+		sortAsc.value = true
+	}
+
+	categorie.value.sort((a, b) => {
+		const aVal = a[key]
+		const bVal = b[key]
+
+		if (aVal === null) return 1
+		if (bVal === null) return -1
+		if (aVal < bVal) return sortAsc.value ? -1 : 1
+		if (aVal > bVal) return sortAsc.value ? 1 : -1
+		return 0
+	})
+}
+
+// Aggiorna getFasce e getCinture per utilizzare i tipi corretti
+const getFasce = (id_categoria: number) => {
+	const cat = categorie.value?.find((c) => c.id_categoria === id_categoria)
+	return cat?.categorie_fasce.map((cf) => cf.fasce_eta) ?? []
+}
+
+const getCinture = (id_categoria: number) => {
+	const cat = categorie.value?.find((c) => c.id_categoria === id_categoria)
+	return cat?.categorie_cinture.map((cc) => cc.cinture) ?? []
+}
 
 const formVisible = ref(false)
 const automaticFormVisible = ref(false)
@@ -336,20 +409,6 @@ const sortAsc = ref(true)
 const feedbackMessage = ref("")
 const feedbackType = ref<"success" | "error">("success")
 
-const sortTable = (key: keyof Categoria) => {
-	if (sortKey.value === key) {
-		sortAsc.value = !sortAsc.value
-	} else {
-		sortKey.value = key
-		sortAsc.value = true
-	}
-	categorie.value.sort((a, b) => {
-		if (a[key] < b[key]) return sortAsc.value ? -1 : 1
-		if (a[key] > b[key]) return sortAsc.value ? 1 : -1
-		return 0
-	})
-}
-
 const openForm = () => {
 	formVisible.value = true
 	categoria.value = {
@@ -360,8 +419,8 @@ const openForm = () => {
 		peso_min: null, // Ensure null is used instead of undefined
 		peso_max: null, // Ensure null is used instead of undefined
 		n_ordine: undefined,
-		fasce: [],
-		cinture: [],
+		categorie_fasce: [],
+		categorie_cinture: [],
 	}
 }
 
@@ -375,8 +434,8 @@ const closeForm = () => {
 		peso_min: null, // Ensure null is used instead of undefined
 		peso_max: null, // Ensure null is used instead of undefined
 		n_ordine: undefined,
-		fasce: [],
-		cinture: [],
+		categorie_fasce: [],
+		categorie_cinture: [],
 	}
 }
 
@@ -413,46 +472,6 @@ const assignOrderNumbers = () => {
 		})
 
 	return Promise.all(promises)
-}
-
-// Update saveCategoria function to handle Prisma types
-const saveCategoria = async (
-	savedCategoria: Partial<CategoriaWithRelations>
-) => {
-	if (!savedCategoria.nome) {
-		console.error("Errore: il campo 'nome' non può essere nullo")
-		return
-	}
-
-	// Se è una nuova categoria (senza id) e non ha n_ordine, trovalo automaticamente
-	if (!savedCategoria.id_categoria && !savedCategoria.n_ordine) {
-		const currentOrders = categorie.value
-			.map((c) => c.n_ordine || 0)
-			.filter((n) => n > 0)
-		savedCategoria.n_ordine =
-			currentOrders.length > 0 ? Math.min(...currentOrders) - 1 : 1
-	}
-
-	// Aggiorna i dati dopo il salvataggio
-	const [
-		{ data: categorieAggiornate },
-		{ data: categorieOverlapAggiornate },
-	] = await Promise.all([
-		useFetch<CategoriaWithRelations[]>("/api/categorie"),
-		useFetch<{ details: CategorieSovrapposte[]; overlappingIds: number[] }>(
-			"/api/categorie-sovrapposte" // URL corretto
-		),
-	])
-
-	// Aggiorna tutti i riferimenti
-	categorie.value = categorieAggiornate.value
-	if (categorieOverlapAggiornate.value) {
-		categorieOverlap.value = categorieOverlapAggiornate.value.overlappingIds
-		overlapDetails.value = categorieOverlapAggiornate.value.details
-	}
-
-	closeForm()
-	await assignOrderNumbers() // Assegna numeri d'ordine mancanti dopo il salvataggio
 }
 
 const toggleCategoriaSelection = (id_categoria?: number) => {
@@ -617,20 +636,6 @@ const copySelectedCategorie = async () => {
 	}
 }
 
-const getFasce = (id_categoria?: number) => {
-	if (id_categoria === undefined) return []
-	const cat = categorie.value?.find((c) => c.id_categoria === id_categoria)
-	// Accedi alla proprietà fascia nidificata per ogni fascia
-	return cat?.fasce.map((f) => f.fascia) ?? []
-}
-
-const getCinture = (id_categoria?: number) => {
-	if (id_categoria === undefined) return []
-	const cat = categorie.value?.find((c) => c.id_categoria === id_categoria)
-	// Accedi alla proprietà cintura nidificata per ogni cintura
-	return cat?.cinture.map((c) => c.cintura) ?? []
-}
-
 const openAutomaticForm = () => {
 	automaticFormVisible.value = true
 }
@@ -776,9 +781,8 @@ const hasOverlap = (id_categoria?: number) => {
 }
 
 const refreshCategorie = async () => {
-	const { data: categorieAggiornate } = await useFetch<
-		CategoriaWithRelations[]
-	>("/api/categorie")
+	const { data: categorieAggiornate } =
+		await useFetch<CategoriaWithRelations[]>("/api/categorie")
 	categorie.value = categorieAggiornate.value
 
 	// Aggiorna anche i dati delle sovrapposizioni

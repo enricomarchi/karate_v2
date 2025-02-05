@@ -214,10 +214,11 @@
 
 <script setup lang="ts">
 import { ref, computed } from "vue"
-import type { PrismaClient } from "@prisma/client"
 import { useFetch } from "nuxt/app"
+import type { fasce_eta } from "@prisma/client"
 
-const ageRange = ref<FasciaEtaForm>({
+// Stato iniziale tipizzato correttamente
+const ageRange = ref<Partial<fasce_eta>>({
 	descrizione: "",
 	anno_nascita_min: 0,
 	anno_nascita_max: 0,
@@ -237,7 +238,7 @@ const sortAsc = ref(true)
 const selectedAgeRanges = ref<number[]>([])
 
 // Effettua il fetch dei dati direttamente nello setup
-const { data: ageRanges } = await useFetch<FasciaEta[]>("/api/fasce")
+const { data: ageRanges } = await useFetch<fasce_eta[]>("/api/fasce")
 
 const appendYearsToTitle = ref(true)
 
@@ -254,29 +255,32 @@ const saveAgeRange = async () => {
 		}
 
 		const endpoint = "/api/fasce"
-		const options: any = {
-			method: ageRange.value.id_fascia ? "PUT" : "POST",
-			body: ageRange.value,
-		}
+		const method = ageRange.value.id_fascia ? "PUT" : "POST"
 
-		if (ageRange.value.id_fascia) {
-			options.query = { id: ageRange.value.id_fascia }
-		}
-
-		const { data, error } = await useFetch<FasciaEta>(endpoint, options)
+		const { data: savedFascia, error } = await useFetch<fasce_eta>(
+			endpoint,
+			{
+				method,
+				body: {
+					...ageRange.value,
+					anno_nascita_min: Number(ageRange.value.anno_nascita_min),
+					anno_nascita_max: Number(ageRange.value.anno_nascita_max),
+				},
+			}
+		)
 
 		if (error.value) throw error.value
 
-		if (data.value && ageRanges.value) {
+		if (savedFascia.value && ageRanges.value) {
 			if (ageRange.value.id_fascia) {
 				const index = ageRanges.value.findIndex(
 					(ar) => ar.id_fascia === ageRange.value.id_fascia
 				)
 				if (index !== -1) {
-					ageRanges.value[index] = data.value
+					ageRanges.value[index] = savedFascia.value
 				}
 			} else {
-				ageRanges.value.push(data.value)
+				ageRanges.value.push(savedFascia.value)
 			}
 		}
 
@@ -341,10 +345,11 @@ const previewTitle = computed(() => {
 	return ageRange.value.descrizione
 })
 
-const editAgeRange = (ar: FasciaEta) => {
+const editAgeRange = (ar: fasce_eta) => {
 	// Quando modifichiamo una fascia esistente, usiamo tutti i campi
 	ageRange.value = {
-		descrizione: ar.descrizione,
+		id_fascia: ar.id_fascia,
+		descrizione: ar.descrizione.replace(/\s*\(\d+-\d+\)$/, ""), // Rimuove gli anni dal titolo se presenti
 		anno_nascita_min: ar.anno_nascita_min,
 		anno_nascita_max: ar.anno_nascita_max,
 	}
@@ -368,21 +373,22 @@ const copySelectedAgeRanges = () => {
 	alert("Fasce d'età copiate negli appunti!")
 }
 
-const sortTable = (key: keyof FasciaEta) => {
+const sortTable = (key: keyof fasce_eta) => {
 	if (sortKey.value === key) {
 		sortAsc.value = !sortAsc.value
 	} else {
 		sortKey.value = key
 		sortAsc.value = true
 	}
-	ageRanges.value.sort((a, b) => {
+	if (!ageRanges.value) return
+	ageRanges.value.sort((a: fasce_eta, b: fasce_eta) => {
 		if (a[key] < b[key]) return sortAsc.value ? -1 : 1
 		if (a[key] > b[key]) return sortAsc.value ? 1 : -1
 		return 0
 	})
 }
 
-const toggleAgeRangeSelection = (id_fascia) => {
+const toggleAgeRangeSelection = (id_fascia: number) => {
 	const index = selectedAgeRanges.value.indexOf(id_fascia)
 	if (index === -1) {
 		selectedAgeRanges.value.push(id_fascia)
@@ -405,12 +411,13 @@ const closeForm = () => {
 }
 
 const toggleAllSelection = () => {
+	if (!ageRanges.value) return
 	if (selectedAgeRanges.value.length === ageRanges.value.length) {
 		selectedAgeRanges.value = []
 	} else {
-		selectedAgeRanges.value = ageRanges.value.map(
-			(ageRange) => ageRange.id_fascia
-		)
+		selectedAgeRanges.value = ageRanges.value
+			.map((range) => range.id_fascia)
+			.filter((id): id is number => id !== undefined)
 	}
 }
 </script>
